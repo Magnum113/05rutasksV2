@@ -45,7 +45,6 @@ import {
 } from "@/admin/utils"
 
 type Screen = "tasks" | "editor"
-type QuickFilter = "all" | "active" | "published"
 type RewardFilter = "all" | RewardType
 type TypeFilter = "all" | TaskType
 type StatusFilter = "all" | TaskStatus
@@ -241,12 +240,6 @@ const STATUS_COLOR: Record<TaskStatus, string> = {
   expired: "gray",
 }
 
-const QUICK_FILTERS: Array<{ key: QuickFilter; label: string }> = [
-  { key: "all", label: "Все" },
-  { key: "active", label: "Только active" },
-  { key: "published", label: "Только published" },
-]
-
 function App() {
   const now = useMemo(() => parseDate(DEMO_NOW_ISO) ?? new Date(), [])
 
@@ -254,7 +247,6 @@ function App() {
 
   const [screen, setScreen] = useState<Screen>("tasks")
   const [globalSearch, setGlobalSearch] = useState("")
-  const [quickFilter, setQuickFilter] = useState<QuickFilter>("all")
 
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
 
@@ -345,14 +337,6 @@ function App() {
         }
       }
 
-      if (quickFilter === "active" && status !== "active") {
-        return false
-      }
-
-      if (quickFilter === "published" && task.publication_state !== "published") {
-        return false
-      }
-
       return true
     })
 
@@ -364,7 +348,7 @@ function App() {
     })
 
     return rows
-  }, [availableTasks, now, query, quickFilter, tasksFilters])
+  }, [availableTasks, now, query, tasksFilters])
 
   const visibleTaskIds = filteredTasks.map((task) => task.id)
   const allVisibleSelected =
@@ -448,7 +432,6 @@ function App() {
       dateFrom: "",
       dateTo: "",
     })
-    setQuickFilter("all")
   }
 
   function beginCreateTask() {
@@ -884,22 +867,6 @@ function App() {
                 </Button>
               </HStack>
             </Flex>
-
-            {screen === "tasks" ? (
-              <HStack wrap="wrap" gap="2">
-                {QUICK_FILTERS.map((item) => (
-                  <Button
-                    key={item.key}
-                    size="sm"
-                    variant={quickFilter === item.key ? "solid" : "outline"}
-                    colorPalette={quickFilter === item.key ? "orange" : "gray"}
-                    onClick={() => setQuickFilter(item.key)}
-                  >
-                    {item.label}
-                  </Button>
-                ))}
-              </HStack>
-            ) : null}
           </Stack>
         </Box>
 
@@ -1128,9 +1095,6 @@ function App() {
                                     </Table.Cell>
                                     <Table.Cell>
                                       <HStack wrap="wrap" gap="1">
-                                        <Button size="xs" variant="outline" onClick={() => onTaskPreview(task)}>
-                                          Просмотр
-                                        </Button>
                                         <Button size="xs" variant="outline" onClick={() => beginEditTask(task)}>
                                           Редактировать
                                         </Button>
