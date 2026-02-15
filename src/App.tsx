@@ -1,25 +1,5 @@
-import { useEffect, useMemo, useState } from "react"
-import {
-  Badge,
-  Box,
-  Button,
-  Card,
-  Checkbox,
-  Dialog,
-  Field,
-  Flex,
-  Grid,
-  Heading,
-  HStack,
-  Image,
-  Input,
-  NativeSelect,
-  Portal,
-  Stack,
-  Table,
-  Text,
-  Textarea,
-} from "@chakra-ui/react"
+import { type ReactNode, useEffect, useMemo, useState } from "react"
+
 import { CLAIM_WINDOW_DAYS, DEMO_NOW_ISO, MOCK_TASKS, REWARD_TYPE_OPTIONS, TASK_TYPE_OPTIONS } from "@/admin/mockData"
 import {
   type RewardType,
@@ -43,6 +23,24 @@ import {
   TASK_TYPE_LABELS,
   toLocalDateTimeInput,
 } from "@/admin/utils"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Textarea } from "@/components/ui/textarea"
+import { cn } from "@/lib/utils"
 
 type Screen = "tasks" | "editor"
 type RewardFilter = "all" | RewardType
@@ -99,12 +97,6 @@ interface ConfirmDialogState {
   confirmLabel: string
   danger: boolean
   action: null | (() => void)
-}
-
-interface ViewDialogState {
-  open: boolean
-  title: string
-  payload: string
 }
 
 function createEmptyEditorForm(now: Date): EditorForm {
@@ -232,12 +224,12 @@ function buildConditions(form: EditorForm): TaskCondition {
   return {}
 }
 
-const STATUS_COLOR: Record<TaskStatus, string> = {
-  upcoming: "blue",
-  active: "green",
-  completed: "orange",
-  reward_claimed: "cyan",
-  expired: "gray",
+const STATUS_BADGE_CLASS: Record<TaskStatus, string> = {
+  upcoming: "bg-sky-100 text-sky-700 border-sky-200",
+  active: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  completed: "bg-amber-100 text-amber-700 border-amber-200",
+  reward_claimed: "bg-cyan-100 text-cyan-700 border-cyan-200",
+  expired: "bg-slate-200 text-slate-700 border-slate-300",
 }
 
 function App() {
@@ -273,12 +265,6 @@ function App() {
     confirmLabel: "Подтвердить",
     danger: false,
     action: null,
-  })
-
-  const [viewDialog, setViewDialog] = useState<ViewDialogState>({
-    open: false,
-    title: "",
-    payload: "",
   })
 
   useEffect(() => {
@@ -372,6 +358,10 @@ function App() {
     fieldErrors.condition_app_screen,
   ].filter(Boolean)
 
+  const [bulkPriority, setBulkPriority] = useState("")
+
+  const selectedTaskCount = selectedTaskIds.length
+
   function setEditorField<K extends keyof EditorForm>(key: K, value: EditorForm[K]) {
     setEditorForm((prev) => ({ ...prev, [key]: value }))
   }
@@ -404,22 +394,6 @@ function App() {
       action: null,
       danger: false,
       confirmLabel: "Подтвердить",
-    })
-  }
-
-  function openViewDialog(title: string, payload: unknown) {
-    setViewDialog({
-      open: true,
-      title,
-      payload: JSON.stringify(payload, null, 2),
-    })
-  }
-
-  function closeViewDialog() {
-    setViewDialog({
-      open: false,
-      title: "",
-      payload: "",
     })
   }
 
@@ -474,14 +448,6 @@ function App() {
     }
 
     setSelectedTaskIds((prev) => prev.filter((id) => !visibleTaskIds.includes(id)))
-  }
-
-  function onTaskPreview(task: Task) {
-    openViewDialog(`Карточка ${task.task_code}`, {
-      ...task,
-      computed_status: computeTaskStatus(task, now),
-      claim_window_days: CLAIM_WINDOW_DAYS,
-    })
   }
 
   function onTaskDuplicate(task: Task) {
@@ -786,225 +752,193 @@ function App() {
   }
 
   function renderStatusBadge(status: TaskStatus) {
-    return (
-      <Badge colorPalette={STATUS_COLOR[status]} variant="subtle" rounded="full" px="2.5" py="1">
-        {STATUS_LABELS[status]}
-      </Badge>
-    )
+    return <Badge className={cn("border", STATUS_BADGE_CLASS[status])}>{STATUS_LABELS[status]}</Badge>
   }
 
-  const selectedTaskCount = selectedTaskIds.length
-
-  const bulkPriorityState = useState("")
-  const [bulkPriority, setBulkPriority] = bulkPriorityState
-
   return (
-    <Flex minH="100vh" direction={{ base: "column", lg: "row" }} bg="gray.50">
-      <Box
-        w={{ base: "full", lg: "300px" }}
-        bg="gray.900"
-        color="gray.50"
-        p="6"
-        borderRightWidth={{ base: "0", lg: "1px" }}
-        borderBottomWidth={{ base: "1px", lg: "0" }}
-      >
-        <Stack gap="5">
-          <Box>
-            <Text fontSize="xs" textTransform="uppercase" letterSpacing="widest" color="orange.200" fontWeight="700">
-              05.RU
-            </Text>
-            <Heading size="lg" mt="1">
-              Админка задач
-            </Heading>
-            <Text color="gray.300" mt="2" fontSize="sm">
-              Интерфейс для создания и редактирования заданий.
-            </Text>
-          </Box>
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="flex min-h-screen flex-col lg:flex-row">
+        <aside className="w-full border-b bg-slate-950 p-6 text-slate-50 lg:w-72 lg:border-b-0 lg:border-r">
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-orange-300">05.RU</p>
+              <h1 className="text-2xl font-semibold">Админка задач</h1>
+              <p className="text-sm text-slate-300">Интерфейс для создания и редактирования заданий.</p>
+            </div>
 
-          <Stack gap="2">
-            <Button
-              justifyContent="flex-start"
-              variant={screen === "tasks" ? "solid" : "surface"}
-              colorPalette={screen === "tasks" ? "orange" : "gray"}
-              onClick={() => setScreen("tasks")}
-            >
-              Задания
-            </Button>
-            <Button
-              justifyContent="flex-start"
-              variant={screen === "editor" ? "solid" : "surface"}
-              colorPalette={screen === "editor" ? "orange" : "gray"}
-              onClick={() => {
-                if (!editingTaskId) {
-                  beginCreateTask()
-                } else {
-                  setScreen("editor")
-                }
-              }}
-            >
-              Создать задание
-            </Button>
-          </Stack>
-        </Stack>
-      </Box>
+            <nav className="space-y-2">
+              <Button
+                className="w-full justify-start"
+                variant={screen === "tasks" ? "default" : "secondary"}
+                onClick={() => setScreen("tasks")}
+              >
+                Задания
+              </Button>
+              <Button
+                className="w-full justify-start"
+                variant={screen === "editor" ? "default" : "secondary"}
+                onClick={() => {
+                  if (!editingTaskId) {
+                    beginCreateTask()
+                  } else {
+                    setScreen("editor")
+                  }
+                }}
+              >
+                Создать задание
+              </Button>
+            </nav>
+          </div>
+        </aside>
 
-      <Box flex="1" minW="0">
-        <Box position="sticky" top="0" zIndex="docked" bg="white" borderBottomWidth="1px" p="4">
-          <Stack gap="2">
-            <Flex direction={{ base: "column", xl: "row" }} gap="3" justify="space-between" align={{ base: "stretch", xl: "end" }}>
-              <Field.Root flex="1">
-                <Field.Label>Глобальный поиск</Field.Label>
+        <main className="min-w-0 flex-1">
+          <div className="sticky top-0 z-10 border-b bg-white/95 p-4 backdrop-blur">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+              <div className="w-full space-y-2 xl:max-w-3xl">
+                <Label htmlFor="global-search">Глобальный поиск</Label>
                 <Input
+                  id="global-search"
                   value={globalSearch}
                   onChange={(event) => setGlobalSearch(event.target.value)}
                   placeholder="task_code, заголовок"
                 />
-              </Field.Root>
+              </div>
 
-              <HStack alignSelf={{ base: "flex-start", xl: "end" }}>
-                <Button colorPalette="orange" onClick={beginCreateTask}>
-                  + Новое задание
-                </Button>
-              </HStack>
-            </Flex>
-          </Stack>
-        </Box>
+              <Button onClick={beginCreateTask}>+ Новое задание</Button>
+            </div>
+          </div>
 
-        <Box p={{ base: "4", lg: "6" }}>
-          <Stack gap="4">
-            {flash ? (
-              <Card.Root
-                borderColor={flash.type === "success" ? "green.200" : flash.type === "error" ? "red.200" : "blue.200"}
-                bg={flash.type === "success" ? "green.50" : flash.type === "error" ? "red.50" : "blue.50"}
-              >
-                <Card.Body>
-                  <Text
-                    color={
-                      flash.type === "success" ? "green.700" : flash.type === "error" ? "red.700" : "blue.700"
-                    }
-                  >
-                    {flash.text}
-                  </Text>
-                </Card.Body>
-              </Card.Root>
-            ) : null}
-
-            {screen === "tasks" ? (
-              <Stack gap="4">
-                <Flex justify="space-between" align="flex-end" wrap="wrap" gap="3">
-                  <Box>
-                    <Heading size="lg">Задания</Heading>
-                    <Text color="gray.600" mt="1">
-                      Сортировка: высокий приоритет выше, при равенстве выше более новое задание.
-                    </Text>
-                  </Box>
-                </Flex>
-
-                <Card.Root>
-                  <Card.Header>
-                    <Heading size="md">Фильтры</Heading>
-                  </Card.Header>
-                  <Card.Body>
-                    <Grid
-                      templateColumns={{ base: "1fr", md: "repeat(2, minmax(0, 1fr))", xl: "repeat(3, minmax(0, 1fr))" }}
-                      gap="3"
+          <div className="p-4 lg:p-6">
+            <div className="space-y-4">
+              {flash ? (
+                <Card
+                  className={cn(
+                    flash.type === "success" && "border-emerald-200 bg-emerald-50",
+                    flash.type === "error" && "border-rose-200 bg-rose-50",
+                    flash.type === "info" && "border-sky-200 bg-sky-50",
+                  )}
+                >
+                  <CardContent className="pt-6">
+                    <p
+                      className={cn(
+                        "text-sm font-medium",
+                        flash.type === "success" && "text-emerald-700",
+                        flash.type === "error" && "text-rose-700",
+                        flash.type === "info" && "text-sky-700",
+                      )}
                     >
-                      <SelectField
-                        label="Статус"
-                        value={tasksFilters.status}
-                        options={[
-                          { value: "all", label: "Все" },
-                          { value: "upcoming", label: "upcoming" },
-                          { value: "active", label: "active" },
-                          { value: "completed", label: "completed" },
-                          { value: "reward_claimed", label: "reward_claimed" },
-                          { value: "expired", label: "expired" },
-                        ]}
-                        onChange={(value) => setTasksFilters((prev) => ({ ...prev, status: value as StatusFilter }))}
-                      />
+                      {flash.text}
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : null}
 
-                      <SelectField
-                        label="Тип задания"
-                        value={tasksFilters.type}
-                        options={[
-                          { value: "all", label: "Все" },
-                          ...TASK_TYPE_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
-                        ]}
-                        onChange={(value) => setTasksFilters((prev) => ({ ...prev, type: value as TypeFilter }))}
-                      />
+              {screen === "tasks" ? (
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-2xl font-semibold">Задания</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Сортировка: высокий приоритет выше, при равенстве выше более новое задание.
+                    </p>
+                  </div>
 
-                      <SelectField
-                        label="Тип награды"
-                        value={tasksFilters.reward}
-                        options={[
-                          { value: "all", label: "Все" },
-                          ...REWARD_TYPE_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
-                        ]}
-                        onChange={(value) =>
-                          setTasksFilters((prev) => ({ ...prev, reward: value as TasksFilters["reward"] }))
-                        }
-                      />
-
-                      <SelectField
-                        label="Публикация"
-                        value={tasksFilters.publication}
-                        options={[
-                          { value: "all", label: "Все" },
-                          { value: "draft", label: "draft" },
-                          { value: "published", label: "published" },
-                        ]}
-                        onChange={(value) =>
-                          setTasksFilters((prev) => ({ ...prev, publication: value as PublicationFilter }))
-                        }
-                      />
-
-                      <Field.Root>
-                        <Field.Label>Active c</Field.Label>
-                        <Input
-                          type="date"
-                          value={tasksFilters.dateFrom}
-                          onChange={(event) => setTasksFilters((prev) => ({ ...prev, dateFrom: event.target.value }))}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Фильтры</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        <SelectField
+                          label="Статус"
+                          value={tasksFilters.status}
+                          options={[
+                            { value: "all", label: "Все" },
+                            { value: "upcoming", label: "upcoming" },
+                            { value: "active", label: "active" },
+                            { value: "completed", label: "completed" },
+                            { value: "reward_claimed", label: "reward_claimed" },
+                            { value: "expired", label: "expired" },
+                          ]}
+                          onChange={(value) => setTasksFilters((prev) => ({ ...prev, status: value as StatusFilter }))}
                         />
-                      </Field.Root>
 
-                      <Field.Root>
-                        <Field.Label>Active по</Field.Label>
-                        <Input
-                          type="date"
-                          value={tasksFilters.dateTo}
-                          onChange={(event) => setTasksFilters((prev) => ({ ...prev, dateTo: event.target.value }))}
+                        <SelectField
+                          label="Тип задания"
+                          value={tasksFilters.type}
+                          options={[
+                            { value: "all", label: "Все" },
+                            ...TASK_TYPE_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
+                          ]}
+                          onChange={(value) => setTasksFilters((prev) => ({ ...prev, type: value as TypeFilter }))}
                         />
-                      </Field.Root>
-                    </Grid>
-                  </Card.Body>
-                  <Card.Footer>
-                    <Button variant="outline" onClick={resetTasksFilters}>
-                      Сбросить фильтры
-                    </Button>
-                  </Card.Footer>
-                </Card.Root>
 
-                <Card.Root>
-                  <Card.Body>
-                    <Stack gap="3">
-                      <HStack gap="3" wrap="wrap">
-                        <Checkbox.Root
-                          checked={allVisibleSelected}
-                          onCheckedChange={(details) => toggleSelectAllVisible(details.checked === true)}
-                        >
-                          <Checkbox.HiddenInput />
-                          <Checkbox.Control />
-                          <Checkbox.Label>Выбрать все в текущем списке</Checkbox.Label>
-                        </Checkbox.Root>
+                        <SelectField
+                          label="Тип награды"
+                          value={tasksFilters.reward}
+                          options={[
+                            { value: "all", label: "Все" },
+                            ...REWARD_TYPE_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
+                          ]}
+                          onChange={(value) =>
+                            setTasksFilters((prev) => ({ ...prev, reward: value as TasksFilters["reward"] }))
+                          }
+                        />
 
-                        <Badge colorPalette="gray" variant="subtle" px="3" py="1" rounded="full">
+                        <SelectField
+                          label="Публикация"
+                          value={tasksFilters.publication}
+                          options={[
+                            { value: "all", label: "Все" },
+                            { value: "draft", label: "draft" },
+                            { value: "published", label: "published" },
+                          ]}
+                          onChange={(value) =>
+                            setTasksFilters((prev) => ({ ...prev, publication: value as PublicationFilter }))
+                          }
+                        />
+
+                        <FieldBlock label="Active c">
+                          <Input
+                            type="date"
+                            value={tasksFilters.dateFrom}
+                            onChange={(event) => setTasksFilters((prev) => ({ ...prev, dateFrom: event.target.value }))}
+                          />
+                        </FieldBlock>
+
+                        <FieldBlock label="Active по">
+                          <Input
+                            type="date"
+                            value={tasksFilters.dateTo}
+                            onChange={(event) => setTasksFilters((prev) => ({ ...prev, dateTo: event.target.value }))}
+                          />
+                        </FieldBlock>
+                      </div>
+                    </CardContent>
+                    <CardFooter>
+                      <Button variant="outline" onClick={resetTasksFilters}>
+                        Сбросить фильтры
+                      </Button>
+                    </CardFooter>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="space-y-4 pt-6">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <label className="inline-flex items-center gap-2 text-sm font-medium">
+                          <Checkbox
+                            checked={allVisibleSelected}
+                            onCheckedChange={(checked) => toggleSelectAllVisible(checked === true)}
+                          />
+                          Выбрать все в текущем списке
+                        </label>
+
+                        <Badge variant="secondary" className="rounded-full px-3 py-1">
                           {selectedTaskCount} выбрано
                         </Badge>
-                      </HStack>
+                      </div>
 
-                      <HStack wrap="wrap" gap="2">
-                        <Field.Root maxW="200px">
-                          <Field.Label>Новый приоритет</Field.Label>
+                      <div className="flex flex-wrap items-end gap-2">
+                        <FieldBlock label="Новый приоритет" className="w-full sm:w-[220px]">
                           <Input
                             type="number"
                             min="0"
@@ -1012,678 +946,552 @@ function App() {
                             onChange={(event) => setBulkPriority(event.target.value)}
                             placeholder="0"
                           />
-                        </Field.Root>
+                        </FieldBlock>
 
-                        <Button mt={{ base: "0", md: "6" }} onClick={() => onBulkPriorityApply(bulkPriority)}>
+                        <Button variant="outline" onClick={() => onBulkPriorityApply(bulkPriority)}>
                           Изменить приоритет
                         </Button>
-                        <Button mt={{ base: "0", md: "6" }} colorPalette="red" variant="outline" onClick={onBulkArchive}>
+                        <Button variant="outline" className="border-rose-300 text-rose-700 hover:bg-rose-50" onClick={onBulkArchive}>
                           Архивировать выбранные
                         </Button>
-                        <Button mt={{ base: "0", md: "6" }} variant="outline" onClick={exportTasksCsv}>
+                        <Button variant="outline" onClick={exportTasksCsv}>
                           Экспорт CSV
                         </Button>
-                      </HStack>
+                      </div>
 
-                      <Table.ScrollArea borderWidth="1px" rounded="md">
-                        <Table.Root size="sm" variant="line">
-                          <Table.Header>
-                            <Table.Row>
-                              <Table.ColumnHeader />
-                              <Table.ColumnHeader>task_code</Table.ColumnHeader>
-                              <Table.ColumnHeader>Заголовок</Table.ColumnHeader>
-                              <Table.ColumnHeader>Тип задания</Table.ColumnHeader>
-                              <Table.ColumnHeader>Период активности</Table.ColumnHeader>
-                              <Table.ColumnHeader>Награды</Table.ColumnHeader>
-                              <Table.ColumnHeader>Приоритет</Table.ColumnHeader>
-                              <Table.ColumnHeader>Публикация / статус</Table.ColumnHeader>
-                              <Table.ColumnHeader>Действия</Table.ColumnHeader>
-                            </Table.Row>
-                          </Table.Header>
-                          <Table.Body>
+                      <div className="rounded-md border bg-white">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-10" />
+                              <TableHead>task_code</TableHead>
+                              <TableHead>Заголовок</TableHead>
+                              <TableHead>Тип задания</TableHead>
+                              <TableHead>Период активности</TableHead>
+                              <TableHead>Награды</TableHead>
+                              <TableHead>Приоритет</TableHead>
+                              <TableHead>Публикация / статус</TableHead>
+                              <TableHead>Действия</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
                             {filteredTasks.length === 0 ? (
-                              <Table.Row>
-                                <Table.Cell colSpan={9}>
-                                  <Text color="gray.500">По текущим фильтрам задания не найдены.</Text>
-                                </Table.Cell>
-                              </Table.Row>
+                              <TableRow>
+                                <TableCell colSpan={9}>
+                                  <p className="py-6 text-center text-sm text-muted-foreground">
+                                    По текущим фильтрам задания не найдены.
+                                  </p>
+                                </TableCell>
+                              </TableRow>
                             ) : (
                               filteredTasks.map((task) => {
                                 const status = computeTaskStatus(task, now)
                                 const selected = selectedTaskIds.includes(task.id)
 
                                 return (
-                                  <Table.Row key={task.id}>
-                                    <Table.Cell>
-                                      <Checkbox.Root
+                                  <TableRow key={task.id}>
+                                    <TableCell>
+                                      <Checkbox
                                         checked={selected}
-                                        onCheckedChange={(details) => toggleTaskSelection(task.id, details.checked === true)}
-                                      >
-                                        <Checkbox.HiddenInput />
-                                        <Checkbox.Control />
-                                      </Checkbox.Root>
-                                    </Table.Cell>
-                                    <Table.Cell>
-                                      <Text fontWeight="700">{task.task_code}</Text>
-                                    </Table.Cell>
-                                    <Table.Cell>{task.title}</Table.Cell>
-                                    <Table.Cell>{TASK_TYPE_LABELS[task.task_type]}</Table.Cell>
-                                    <Table.Cell>
+                                        onCheckedChange={(checked) => toggleTaskSelection(task.id, checked === true)}
+                                      />
+                                    </TableCell>
+                                    <TableCell className="font-semibold">{task.task_code}</TableCell>
+                                    <TableCell>{task.title}</TableCell>
+                                    <TableCell>{TASK_TYPE_LABELS[task.task_type]}</TableCell>
+                                    <TableCell>
                                       {formatDateTime(task.active_from)} - {formatDateTime(task.active_to)}
-                                    </Table.Cell>
-                                    <Table.Cell>
-                                      <HStack wrap="wrap">
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="flex flex-wrap gap-1">
                                         {task.reward_types.map((reward) => (
-                                          <Badge key={reward} colorPalette="purple" variant="subtle" rounded="full">
+                                          <Badge key={reward} variant="outline" className="rounded-full">
                                             {reward}
                                           </Badge>
                                         ))}
-                                      </HStack>
-                                    </Table.Cell>
-                                    <Table.Cell>{task.priority}</Table.Cell>
-                                    <Table.Cell>
-                                      <HStack wrap="wrap">
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>{task.priority}</TableCell>
+                                    <TableCell>
+                                      <div className="flex flex-wrap gap-1">
                                         <Badge
-                                          colorPalette={task.publication_state === "published" ? "blue" : "yellow"}
-                                          variant="subtle"
-                                          rounded="full"
+                                          className={cn(
+                                            "border",
+                                            task.publication_state === "published"
+                                              ? "border-blue-200 bg-blue-100 text-blue-700"
+                                              : "border-amber-200 bg-amber-100 text-amber-700",
+                                          )}
                                         >
                                           {task.publication_state}
                                         </Badge>
                                         {renderStatusBadge(status)}
-                                      </HStack>
-                                    </Table.Cell>
-                                    <Table.Cell>
-                                      <HStack wrap="wrap" gap="1">
-                                        <Button size="xs" variant="outline" onClick={() => beginEditTask(task)}>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="flex flex-wrap gap-1">
+                                        <Button size="sm" variant="outline" onClick={() => beginEditTask(task)}>
                                           Редактировать
                                         </Button>
-                                        <Button size="xs" variant="outline" onClick={() => onTaskDuplicate(task)}>
+                                        <Button size="sm" variant="outline" onClick={() => onTaskDuplicate(task)}>
                                           Дублировать
                                         </Button>
                                         <Button
-                                          size="xs"
+                                          size="sm"
                                           variant="outline"
-                                          colorPalette="red"
+                                          className="border-rose-300 text-rose-700 hover:bg-rose-50"
                                           onClick={() => onTaskArchive(task)}
                                         >
                                           Архивировать
                                         </Button>
-                                      </HStack>
-                                    </Table.Cell>
-                                  </Table.Row>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
                                 )
                               })
                             )}
-                          </Table.Body>
-                        </Table.Root>
-                      </Table.ScrollArea>
-                    </Stack>
-                  </Card.Body>
-                </Card.Root>
-              </Stack>
-            ) : null}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : null}
 
-            {screen === "editor" ? (
-              <Stack gap="4">
-                <Box>
-                  <Heading size="lg">{editingTaskId ? "Редактировать задание" : "Создать задание"}</Heading>
-                  <Text color="gray.600" mt="1">
-                    Заполните параметры задания и настройте награды.
-                  </Text>
-                </Box>
+              {screen === "editor" ? (
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-2xl font-semibold">{editingTaskId ? "Редактировать задание" : "Создать задание"}</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">Заполните параметры задания и настройте награды.</p>
+                  </div>
 
-                {formErrors.length > 0 ? (
-                  <Card.Root borderColor="red.200" bg="red.50">
-                    <Card.Header>
-                      <Heading size="sm" color="red.700">
-                        Проверьте поля формы
-                      </Heading>
-                    </Card.Header>
-                    <Card.Body>
-                      <Stack gap="1" as="ul" pl="4">
-                        {formErrors.map((error) => (
-                          <Text as="li" color="red.700" key={error}>
-                            {error}
-                          </Text>
-                        ))}
-                      </Stack>
-                    </Card.Body>
-                  </Card.Root>
-                ) : null}
+                  {formErrors.length > 0 ? (
+                    <Card className="border-rose-200 bg-rose-50">
+                      <CardHeader>
+                        <CardTitle className="text-rose-700">Проверьте поля формы</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="list-disc space-y-1 pl-5 text-sm text-rose-700">
+                          {formErrors.map((error) => (
+                            <li key={error}>{error}</li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  ) : null}
 
-                <Card.Root>
-                  <Card.Header>
-                    <Heading size="md">Основное</Heading>
-                  </Card.Header>
-                  <Card.Body>
-                    <Grid templateColumns={{ base: "1fr", lg: "repeat(3, minmax(0, 1fr))" }} gap="3">
-                      <Field.Root invalid={Boolean(fieldErrors.task_code)}>
-                        <Field.Label>task_code *</Field.Label>
-                        <Input
-                          value={editorForm.task_code}
-                          onChange={(event) => setEditorField("task_code", event.target.value)}
-                          placeholder="TASK_CODE_001"
-                          readOnly={Boolean(isEditingPublishedTask)}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Основное</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                        <FieldBlock
+                          label="task_code *"
+                          hint={
+                            isEditingPublishedTask
+                              ? "task_code заблокирован, потому что задание уже опубликовано"
+                              : "Уникальное значение. После публикации редактирование блокируется."
+                          }
+                          error={fieldErrors.task_code}
+                        >
+                          <Input
+                            value={editorForm.task_code}
+                            onChange={(event) => setEditorField("task_code", event.target.value)}
+                            placeholder="TASK_CODE_001"
+                            readOnly={Boolean(isEditingPublishedTask)}
+                          />
+                        </FieldBlock>
+
+                        <FieldBlock label="Заголовок *" error={fieldErrors.title}>
+                          <Input
+                            value={editorForm.title}
+                            onChange={(event) => setEditorField("title", event.target.value)}
+                            placeholder="Добавьте 3 товара в корзину"
+                          />
+                        </FieldBlock>
+
+                        <FieldBlock label="Приоритет *" error={fieldErrors.priority}>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={editorForm.priority}
+                            onChange={(event) => setEditorField("priority", event.target.value)}
+                          />
+                        </FieldBlock>
+                      </div>
+
+                      <FieldBlock label="Описание *" error={fieldErrors.description}>
+                        <Textarea
+                          value={editorForm.description}
+                          onChange={(event) => setEditorField("description", event.target.value)}
+                          rows={3}
+                          placeholder="Кратко опишите условие и пользу"
                         />
-                        <Field.HelperText>
-                          {isEditingPublishedTask
-                            ? "task_code заблокирован, потому что задание уже опубликовано"
-                            : "Уникальное значение. После публикации редактирование блокируется."}
-                        </Field.HelperText>
-                        {fieldErrors.task_code ? <Field.ErrorText>{fieldErrors.task_code}</Field.ErrorText> : null}
-                      </Field.Root>
+                      </FieldBlock>
 
-                      <Field.Root invalid={Boolean(fieldErrors.title)}>
-                        <Field.Label>Заголовок *</Field.Label>
-                        <Input
-                          value={editorForm.title}
-                          onChange={(event) => setEditorField("title", event.target.value)}
-                          placeholder="Добавьте 3 товара в корзину"
-                        />
-                        {fieldErrors.title ? <Field.ErrorText>{fieldErrors.title}</Field.ErrorText> : null}
-                      </Field.Root>
-
-                      <Field.Root invalid={Boolean(fieldErrors.priority)}>
-                        <Field.Label>Приоритет *</Field.Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          value={editorForm.priority}
-                          onChange={(event) => setEditorField("priority", event.target.value)}
-                        />
-                        {fieldErrors.priority ? <Field.ErrorText>{fieldErrors.priority}</Field.ErrorText> : null}
-                      </Field.Root>
-                    </Grid>
-
-                    <Field.Root mt="3" invalid={Boolean(fieldErrors.description)}>
-                      <Field.Label>Описание *</Field.Label>
-                      <Textarea
-                        value={editorForm.description}
-                        onChange={(event) => setEditorField("description", event.target.value)}
-                        rows={3}
-                        placeholder="Кратко опишите условие и пользу"
-                      />
-                      {fieldErrors.description ? <Field.ErrorText>{fieldErrors.description}</Field.ErrorText> : null}
-                    </Field.Root>
-
-                    <Grid templateColumns={{ base: "1fr", lg: "repeat(2, minmax(0, 1fr))" }} gap="3" mt="3">
-                      <Field.Root>
-                        <Field.Label>Загрузка изображения</Field.Label>
-                        <Input
-                          type="file"
-                          accept="image/*"
-                          onChange={(event) => {
-                            const file = event.target.files?.[0]
-                            if (!file) {
-                              return
-                            }
-                            const reader = new FileReader()
-                            reader.onload = () => {
-                              if (typeof reader.result === "string") {
-                                setEditorField("image_upload_preview", reader.result)
+                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                        <FieldBlock label="Загрузка изображения">
+                          <Input
+                            type="file"
+                            accept="image/*"
+                            onChange={(event) => {
+                              const file = event.target.files?.[0]
+                              if (!file) {
+                                return
                               }
-                            }
-                            reader.readAsDataURL(file)
+                              const reader = new FileReader()
+                              reader.onload = () => {
+                                if (typeof reader.result === "string") {
+                                  setEditorField("image_upload_preview", reader.result)
+                                }
+                              }
+                              reader.readAsDataURL(file)
+                            }}
+                          />
+                        </FieldBlock>
+
+                        <FieldBlock label="Или URL изображения">
+                          <Input
+                            value={editorForm.image_url}
+                            onChange={(event) => setEditorField("image_url", event.target.value)}
+                            placeholder="https://..."
+                          />
+                        </FieldBlock>
+                      </div>
+
+                      <div className="min-h-[120px] rounded-md border bg-slate-50 p-3">
+                        {editorForm.image_upload_preview || editorForm.image_url ? (
+                          <img
+                            src={editorForm.image_upload_preview || editorForm.image_url}
+                            alt="preview"
+                            className="max-h-[200px] w-full rounded-md object-cover"
+                          />
+                        ) : (
+                          <p className="text-sm text-muted-foreground">Превью изображения</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Периоды</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                        <FieldBlock label="active_from *" error={fieldErrors.active_from}>
+                          <Input
+                            type="datetime-local"
+                            value={editorForm.active_from}
+                            onChange={(event) => setEditorField("active_from", event.target.value)}
+                          />
+                        </FieldBlock>
+
+                        <FieldBlock label="active_to *" error={fieldErrors.active_to}>
+                          <Input
+                            type="datetime-local"
+                            value={editorForm.active_to}
+                            onChange={(event) => setEditorField("active_to", event.target.value)}
+                          />
+                        </FieldBlock>
+                      </div>
+
+                      <Card className="border-blue-200 bg-blue-50">
+                        <CardContent className="pt-6">
+                          <p className="text-sm text-blue-800">
+                            Окно claim после завершения задания фиксированное: <span className="font-bold">{CLAIM_WINDOW_DAYS} дней</span>{" "}
+                            (не настраивается).
+                          </p>
+                        </CardContent>
+                      </Card>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Тип задания и условия</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                        <SelectField
+                          label="Тип задания *"
+                          value={editorForm.task_type}
+                          options={TASK_TYPE_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
+                          onChange={(value) => setEditorField("task_type", value as TaskType)}
+                        />
+
+                        <SelectField
+                          label="Тип перехода к выполнению *"
+                          value={editorForm.target_type}
+                          options={[
+                            { value: "internal_url", label: "internal_url" },
+                            { value: "external_url", label: "external_url" },
+                            { value: "app_screen", label: "app_screen" },
+                          ]}
+                          onChange={(value) => setEditorField("target_type", value as TargetType)}
+                        />
+                      </div>
+
+                      <div className="space-y-3">
+                        {editorForm.task_type === "add_to_cart" || editorForm.task_type === "add_to_favorites" ? (
+                          <FieldBlock label="Количество товаров *" error={fieldErrors.condition_items_count}>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={editorForm.condition_items_count}
+                              onChange={(event) => setEditorField("condition_items_count", event.target.value)}
+                            />
+                          </FieldBlock>
+                        ) : null}
+
+                        {editorForm.task_type === "purchase_amount" ? (
+                          <FieldBlock label="Минимальная сумма заказа (₽) *" error={fieldErrors.condition_min_amount}>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={editorForm.condition_min_amount}
+                              onChange={(event) => setEditorField("condition_min_amount", event.target.value)}
+                            />
+                          </FieldBlock>
+                        ) : null}
+
+                        {editorForm.task_type === "purchase_category" ? (
+                          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                            <FieldBlock label="category_id *" error={fieldErrors.condition_category_id}>
+                              <Input
+                                value={editorForm.condition_category_id}
+                                onChange={(event) => setEditorField("condition_category_id", event.target.value)}
+                                placeholder="electronics"
+                              />
+                            </FieldBlock>
+
+                            <FieldBlock label="Минимальная сумма заказа (₽) *" error={fieldErrors.condition_min_amount}>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={editorForm.condition_min_amount}
+                                onChange={(event) => setEditorField("condition_min_amount", event.target.value)}
+                              />
+                            </FieldBlock>
+                          </div>
+                        ) : null}
+
+                        {editorForm.task_type === "purchase_seller" ? (
+                          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                            <FieldBlock label="seller_id *" error={fieldErrors.condition_seller_id}>
+                              <Input
+                                value={editorForm.condition_seller_id}
+                                onChange={(event) => setEditorField("condition_seller_id", event.target.value)}
+                                placeholder="seller-123"
+                              />
+                            </FieldBlock>
+
+                            <FieldBlock label="Минимальная сумма заказа (₽) *" error={fieldErrors.condition_min_amount}>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={editorForm.condition_min_amount}
+                                onChange={(event) => setEditorField("condition_min_amount", event.target.value)}
+                              />
+                            </FieldBlock>
+                          </div>
+                        ) : null}
+
+                        {editorForm.task_type === "visit_url" || editorForm.task_type === "visit_external_url" ? (
+                          <FieldBlock label="URL для проверки факта посещения *" error={fieldErrors.condition_url}>
+                            <Input
+                              value={editorForm.condition_url}
+                              onChange={(event) => setEditorField("condition_url", event.target.value)}
+                              placeholder="https://example.com"
+                            />
+                          </FieldBlock>
+                        ) : null}
+
+                        {editorForm.task_type === "visit_app_screen" ? (
+                          <FieldBlock label="app_screen *" error={fieldErrors.condition_app_screen}>
+                            <Input
+                              value={editorForm.condition_app_screen}
+                              onChange={(event) => setEditorField("condition_app_screen", event.target.value)}
+                              placeholder="profile/home"
+                            />
+                          </FieldBlock>
+                        ) : null}
+
+                        {conditionErrors.length > 1 ? (
+                          <p className="text-sm text-rose-600">Проверьте поля условий выполнения задания.</p>
+                        ) : null}
+                      </div>
+
+                      <FieldBlock label="target_value *" error={fieldErrors.target_value}>
+                        <Input
+                          value={editorForm.target_value}
+                          onChange={(event) => setEditorField("target_value", event.target.value)}
+                          placeholder="/catalog или https://... или app://screen"
+                        />
+                      </FieldBlock>
+
+                      {PURCHASE_TYPES.includes(editorForm.task_type) ? (
+                        <Card className="border-dashed bg-slate-50">
+                          <CardHeader>
+                            <CardTitle className="text-base">Фиксированный период покупок (только для purchase)</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                              <FieldBlock label="purchase_period_from *" error={fieldErrors.purchase_period_from}>
+                                <Input
+                                  type="date"
+                                  value={editorForm.purchase_period_from}
+                                  onChange={(event) => setEditorField("purchase_period_from", event.target.value)}
+                                />
+                              </FieldBlock>
+
+                              <FieldBlock label="purchase_period_to *" error={fieldErrors.purchase_period_to}>
+                                <Input
+                                  type="date"
+                                  value={editorForm.purchase_period_to}
+                                  onChange={(event) => setEditorField("purchase_period_to", event.target.value)}
+                                />
+                              </FieldBlock>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ) : null}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Награды</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex flex-wrap gap-4">
+                        <label className="inline-flex items-center gap-2 text-sm font-medium">
+                          <Checkbox
+                            checked={editorForm.reward_bonus}
+                            onCheckedChange={(checked) => setEditorField("reward_bonus", checked === true)}
+                          />
+                          bonus
+                        </label>
+
+                        <label className="inline-flex items-center gap-2 text-sm font-medium">
+                          <Checkbox
+                            checked={editorForm.reward_promocode}
+                            onCheckedChange={(checked) => setEditorField("reward_promocode", checked === true)}
+                          />
+                          promocode
+                        </label>
+                      </div>
+
+                      {fieldErrors.rewards ? <p className="text-sm text-rose-600">{fieldErrors.rewards}</p> : null}
+
+                      {editorForm.reward_bonus ? (
+                        <Card className="border-dashed bg-slate-50">
+                          <CardHeader>
+                            <CardTitle className="text-base">Параметры bonus</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <FieldBlock label="Количество бонусов *" error={fieldErrors.bonus_amount}>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={editorForm.bonus_amount}
+                                onChange={(event) => setEditorField("bonus_amount", event.target.value)}
+                              />
+                            </FieldBlock>
+                          </CardContent>
+                        </Card>
+                      ) : null}
+
+                      {editorForm.reward_promocode ? (
+                        <Card className="border-dashed bg-slate-50">
+                          <CardHeader>
+                            <CardTitle className="text-base">Параметры promocode</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                              <FieldBlock label="Код/идентификатор *" error={fieldErrors.promocode_code}>
+                                <Input
+                                  value={editorForm.promocode_code}
+                                  onChange={(event) => setEditorField("promocode_code", event.target.value)}
+                                  placeholder="SPRING-10"
+                                />
+                              </FieldBlock>
+
+                              <FieldBlock label="Срок действия *" error={fieldErrors.promocode_valid_to}>
+                                <Input
+                                  type="date"
+                                  value={editorForm.promocode_valid_to}
+                                  onChange={(event) => setEditorField("promocode_valid_to", event.target.value)}
+                                />
+                              </FieldBlock>
+                            </div>
+
+                            <FieldBlock label="Условия *" error={fieldErrors.promocode_terms}>
+                              <Textarea
+                                rows={3}
+                                value={editorForm.promocode_terms}
+                                onChange={(event) => setEditorField("promocode_terms", event.target.value)}
+                                placeholder="Минимальная сумма, исключения, срок"
+                              />
+                            </FieldBlock>
+                          </CardContent>
+                        </Card>
+                      ) : null}
+                    </CardContent>
+                  </Card>
+
+                  <Card className="sticky bottom-2">
+                    <CardContent className="pt-6">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button variant="outline" onClick={() => saveEditor(false)}>
+                          Сохранить черновик
+                        </Button>
+                        <Button onClick={() => saveEditor(true)}>Опубликовать</Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setEditingTaskId(null)
+                            setEditorForm(createEmptyEditorForm(now))
+                            setFormErrors([])
+                            setFieldErrors({})
+                            setScreen("tasks")
                           }}
-                        />
-                      </Field.Root>
+                        >
+                          Отмена
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </main>
+      </div>
 
-                      <Field.Root>
-                        <Field.Label>Или URL изображения</Field.Label>
-                        <Input
-                          value={editorForm.image_url}
-                          onChange={(event) => setEditorField("image_url", event.target.value)}
-                          placeholder="https://..."
-                        />
-                      </Field.Root>
-                    </Grid>
-
-                    <Box mt="3" p="3" borderWidth="1px" rounded="md" minH="120px" bg="gray.50">
-                      {editorForm.image_upload_preview || editorForm.image_url ? (
-                        <Image
-                          src={editorForm.image_upload_preview || editorForm.image_url}
-                          alt="preview"
-                          maxH="200px"
-                          w="full"
-                          objectFit="cover"
-                          rounded="md"
-                        />
-                      ) : (
-                        <Text color="gray.500">Превью изображения</Text>
-                      )}
-                    </Box>
-                  </Card.Body>
-                </Card.Root>
-
-                <Card.Root>
-                  <Card.Header>
-                    <Heading size="md">Периоды</Heading>
-                  </Card.Header>
-                  <Card.Body>
-                    <Grid templateColumns={{ base: "1fr", lg: "repeat(2, minmax(0, 1fr))" }} gap="3">
-                      <Field.Root invalid={Boolean(fieldErrors.active_from)}>
-                        <Field.Label>active_from *</Field.Label>
-                        <Input
-                          type="datetime-local"
-                          value={editorForm.active_from}
-                          onChange={(event) => setEditorField("active_from", event.target.value)}
-                        />
-                        {fieldErrors.active_from ? <Field.ErrorText>{fieldErrors.active_from}</Field.ErrorText> : null}
-                      </Field.Root>
-
-                      <Field.Root invalid={Boolean(fieldErrors.active_to)}>
-                        <Field.Label>active_to *</Field.Label>
-                        <Input
-                          type="datetime-local"
-                          value={editorForm.active_to}
-                          onChange={(event) => setEditorField("active_to", event.target.value)}
-                        />
-                        {fieldErrors.active_to ? <Field.ErrorText>{fieldErrors.active_to}</Field.ErrorText> : null}
-                      </Field.Root>
-                    </Grid>
-
-                    <Card.Root mt="3" bg="blue.50" borderColor="blue.200">
-                      <Card.Body>
-                        <Text color="blue.800">
-                          Окно claim после завершения задания фиксированное: <Text as="span" fontWeight="700">{CLAIM_WINDOW_DAYS} дней</Text>{" "}
-                          (не настраивается).
-                        </Text>
-                      </Card.Body>
-                    </Card.Root>
-                  </Card.Body>
-                </Card.Root>
-
-                <Card.Root>
-                  <Card.Header>
-                    <Heading size="md">Тип задания и условия</Heading>
-                  </Card.Header>
-                  <Card.Body>
-                    <Grid templateColumns={{ base: "1fr", lg: "repeat(2, minmax(0, 1fr))" }} gap="3">
-                      <SelectField
-                        label="Тип задания *"
-                        value={editorForm.task_type}
-                        options={TASK_TYPE_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
-                        onChange={(value) => setEditorField("task_type", value as TaskType)}
-                      />
-
-                      <SelectField
-                        label="Тип перехода к выполнению *"
-                        value={editorForm.target_type}
-                        options={[
-                          { value: "internal_url", label: "internal_url" },
-                          { value: "external_url", label: "external_url" },
-                          { value: "app_screen", label: "app_screen" },
-                        ]}
-                        onChange={(value) => setEditorField("target_type", value as TargetType)}
-                      />
-                    </Grid>
-
-                    <Box mt="3">
-                      {editorForm.task_type === "add_to_cart" || editorForm.task_type === "add_to_favorites" ? (
-                        <Field.Root invalid={Boolean(fieldErrors.condition_items_count)}>
-                          <Field.Label>Количество товаров *</Field.Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={editorForm.condition_items_count}
-                            onChange={(event) => setEditorField("condition_items_count", event.target.value)}
-                          />
-                          {fieldErrors.condition_items_count ? (
-                            <Field.ErrorText>{fieldErrors.condition_items_count}</Field.ErrorText>
-                          ) : null}
-                        </Field.Root>
-                      ) : null}
-
-                      {editorForm.task_type === "purchase_amount" ? (
-                        <Field.Root invalid={Boolean(fieldErrors.condition_min_amount)}>
-                          <Field.Label>Минимальная сумма заказа (₽) *</Field.Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={editorForm.condition_min_amount}
-                            onChange={(event) => setEditorField("condition_min_amount", event.target.value)}
-                          />
-                          {fieldErrors.condition_min_amount ? (
-                            <Field.ErrorText>{fieldErrors.condition_min_amount}</Field.ErrorText>
-                          ) : null}
-                        </Field.Root>
-                      ) : null}
-
-                      {editorForm.task_type === "purchase_category" ? (
-                        <Grid templateColumns={{ base: "1fr", lg: "repeat(2, minmax(0, 1fr))" }} gap="3">
-                          <Field.Root invalid={Boolean(fieldErrors.condition_category_id)}>
-                            <Field.Label>category_id *</Field.Label>
-                            <Input
-                              value={editorForm.condition_category_id}
-                              onChange={(event) => setEditorField("condition_category_id", event.target.value)}
-                              placeholder="electronics"
-                            />
-                            {fieldErrors.condition_category_id ? (
-                              <Field.ErrorText>{fieldErrors.condition_category_id}</Field.ErrorText>
-                            ) : null}
-                          </Field.Root>
-
-                          <Field.Root invalid={Boolean(fieldErrors.condition_min_amount)}>
-                            <Field.Label>Минимальная сумма заказа (₽) *</Field.Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={editorForm.condition_min_amount}
-                              onChange={(event) => setEditorField("condition_min_amount", event.target.value)}
-                            />
-                            {fieldErrors.condition_min_amount ? (
-                              <Field.ErrorText>{fieldErrors.condition_min_amount}</Field.ErrorText>
-                            ) : null}
-                          </Field.Root>
-                        </Grid>
-                      ) : null}
-
-                      {editorForm.task_type === "purchase_seller" ? (
-                        <Grid templateColumns={{ base: "1fr", lg: "repeat(2, minmax(0, 1fr))" }} gap="3">
-                          <Field.Root invalid={Boolean(fieldErrors.condition_seller_id)}>
-                            <Field.Label>seller_id *</Field.Label>
-                            <Input
-                              value={editorForm.condition_seller_id}
-                              onChange={(event) => setEditorField("condition_seller_id", event.target.value)}
-                              placeholder="seller-123"
-                            />
-                            {fieldErrors.condition_seller_id ? (
-                              <Field.ErrorText>{fieldErrors.condition_seller_id}</Field.ErrorText>
-                            ) : null}
-                          </Field.Root>
-
-                          <Field.Root invalid={Boolean(fieldErrors.condition_min_amount)}>
-                            <Field.Label>Минимальная сумма заказа (₽) *</Field.Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={editorForm.condition_min_amount}
-                              onChange={(event) => setEditorField("condition_min_amount", event.target.value)}
-                            />
-                            {fieldErrors.condition_min_amount ? (
-                              <Field.ErrorText>{fieldErrors.condition_min_amount}</Field.ErrorText>
-                            ) : null}
-                          </Field.Root>
-                        </Grid>
-                      ) : null}
-
-                      {editorForm.task_type === "visit_url" || editorForm.task_type === "visit_external_url" ? (
-                        <Field.Root invalid={Boolean(fieldErrors.condition_url)}>
-                          <Field.Label>URL для проверки факта посещения *</Field.Label>
-                          <Input
-                            value={editorForm.condition_url}
-                            onChange={(event) => setEditorField("condition_url", event.target.value)}
-                            placeholder="https://example.com"
-                          />
-                          {fieldErrors.condition_url ? <Field.ErrorText>{fieldErrors.condition_url}</Field.ErrorText> : null}
-                        </Field.Root>
-                      ) : null}
-
-                      {editorForm.task_type === "visit_app_screen" ? (
-                        <Field.Root invalid={Boolean(fieldErrors.condition_app_screen)}>
-                          <Field.Label>app_screen *</Field.Label>
-                          <Input
-                            value={editorForm.condition_app_screen}
-                            onChange={(event) => setEditorField("condition_app_screen", event.target.value)}
-                            placeholder="profile/home"
-                          />
-                          {fieldErrors.condition_app_screen ? (
-                            <Field.ErrorText>{fieldErrors.condition_app_screen}</Field.ErrorText>
-                          ) : null}
-                        </Field.Root>
-                      ) : null}
-
-                      {conditionErrors.length > 1 ? (
-                        <Text color="red.600" fontSize="sm" mt="1">
-                          Проверьте поля условий выполнения задания.
-                        </Text>
-                      ) : null}
-                    </Box>
-
-                    <Field.Root mt="3" invalid={Boolean(fieldErrors.target_value)}>
-                      <Field.Label>target_value *</Field.Label>
-                      <Input
-                        value={editorForm.target_value}
-                        onChange={(event) => setEditorField("target_value", event.target.value)}
-                        placeholder="/catalog или https://... или app://screen"
-                      />
-                      {fieldErrors.target_value ? <Field.ErrorText>{fieldErrors.target_value}</Field.ErrorText> : null}
-                    </Field.Root>
-
-                    {PURCHASE_TYPES.includes(editorForm.task_type) ? (
-                      <Card.Root mt="3" bg="gray.50" borderStyle="dashed">
-                        <Card.Header>
-                          <Heading size="sm">Фиксированный период покупок (только для purchase)</Heading>
-                        </Card.Header>
-                        <Card.Body>
-                          <Grid templateColumns={{ base: "1fr", lg: "repeat(2, minmax(0, 1fr))" }} gap="3">
-                            <Field.Root invalid={Boolean(fieldErrors.purchase_period_from)}>
-                              <Field.Label>purchase_period_from *</Field.Label>
-                              <Input
-                                type="date"
-                                value={editorForm.purchase_period_from}
-                                onChange={(event) => setEditorField("purchase_period_from", event.target.value)}
-                              />
-                              {fieldErrors.purchase_period_from ? (
-                                <Field.ErrorText>{fieldErrors.purchase_period_from}</Field.ErrorText>
-                              ) : null}
-                            </Field.Root>
-
-                            <Field.Root invalid={Boolean(fieldErrors.purchase_period_to)}>
-                              <Field.Label>purchase_period_to *</Field.Label>
-                              <Input
-                                type="date"
-                                value={editorForm.purchase_period_to}
-                                onChange={(event) => setEditorField("purchase_period_to", event.target.value)}
-                              />
-                              {fieldErrors.purchase_period_to ? (
-                                <Field.ErrorText>{fieldErrors.purchase_period_to}</Field.ErrorText>
-                              ) : null}
-                            </Field.Root>
-                          </Grid>
-                        </Card.Body>
-                      </Card.Root>
-                    ) : null}
-                  </Card.Body>
-                </Card.Root>
-
-                <Card.Root>
-                  <Card.Header>
-                    <Heading size="md">Награды</Heading>
-                  </Card.Header>
-                  <Card.Body>
-                    <HStack wrap="wrap" gap="4">
-                      <Checkbox.Root
-                        checked={editorForm.reward_bonus}
-                        onCheckedChange={(details) => setEditorField("reward_bonus", details.checked === true)}
-                      >
-                        <Checkbox.HiddenInput />
-                        <Checkbox.Control />
-                        <Checkbox.Label>bonus</Checkbox.Label>
-                      </Checkbox.Root>
-
-                      <Checkbox.Root
-                        checked={editorForm.reward_promocode}
-                        onCheckedChange={(details) => setEditorField("reward_promocode", details.checked === true)}
-                      >
-                        <Checkbox.HiddenInput />
-                        <Checkbox.Control />
-                        <Checkbox.Label>promocode</Checkbox.Label>
-                      </Checkbox.Root>
-                    </HStack>
-
-                    {fieldErrors.rewards ? (
-                      <Text color="red.600" fontSize="sm" mt="2">
-                        {fieldErrors.rewards}
-                      </Text>
-                    ) : null}
-
-                    {editorForm.reward_bonus ? (
-                      <Card.Root mt="3" bg="gray.50" borderStyle="dashed">
-                        <Card.Header>
-                          <Heading size="sm">Параметры bonus</Heading>
-                        </Card.Header>
-                        <Card.Body>
-                          <Field.Root invalid={Boolean(fieldErrors.bonus_amount)}>
-                            <Field.Label>Количество бонусов *</Field.Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={editorForm.bonus_amount}
-                              onChange={(event) => setEditorField("bonus_amount", event.target.value)}
-                            />
-                            {fieldErrors.bonus_amount ? <Field.ErrorText>{fieldErrors.bonus_amount}</Field.ErrorText> : null}
-                          </Field.Root>
-                        </Card.Body>
-                      </Card.Root>
-                    ) : null}
-
-                    {editorForm.reward_promocode ? (
-                      <Card.Root mt="3" bg="gray.50" borderStyle="dashed">
-                        <Card.Header>
-                          <Heading size="sm">Параметры promocode</Heading>
-                        </Card.Header>
-                        <Card.Body>
-                          <Grid templateColumns={{ base: "1fr", lg: "repeat(2, minmax(0, 1fr))" }} gap="3">
-                            <Field.Root invalid={Boolean(fieldErrors.promocode_code)}>
-                              <Field.Label>Код/идентификатор *</Field.Label>
-                              <Input
-                                value={editorForm.promocode_code}
-                                onChange={(event) => setEditorField("promocode_code", event.target.value)}
-                                placeholder="SPRING-10"
-                              />
-                              {fieldErrors.promocode_code ? (
-                                <Field.ErrorText>{fieldErrors.promocode_code}</Field.ErrorText>
-                              ) : null}
-                            </Field.Root>
-
-                            <Field.Root invalid={Boolean(fieldErrors.promocode_valid_to)}>
-                              <Field.Label>Срок действия *</Field.Label>
-                              <Input
-                                type="date"
-                                value={editorForm.promocode_valid_to}
-                                onChange={(event) => setEditorField("promocode_valid_to", event.target.value)}
-                              />
-                              {fieldErrors.promocode_valid_to ? (
-                                <Field.ErrorText>{fieldErrors.promocode_valid_to}</Field.ErrorText>
-                              ) : null}
-                            </Field.Root>
-                          </Grid>
-
-                          <Field.Root mt="3" invalid={Boolean(fieldErrors.promocode_terms)}>
-                            <Field.Label>Условия *</Field.Label>
-                            <Textarea
-                              rows={3}
-                              value={editorForm.promocode_terms}
-                              onChange={(event) => setEditorField("promocode_terms", event.target.value)}
-                              placeholder="Минимальная сумма, исключения, срок"
-                            />
-                            {fieldErrors.promocode_terms ? (
-                              <Field.ErrorText>{fieldErrors.promocode_terms}</Field.ErrorText>
-                            ) : null}
-                          </Field.Root>
-                        </Card.Body>
-                      </Card.Root>
-                    ) : null}
-                  </Card.Body>
-                </Card.Root>
-
-                <Card.Root position="sticky" bottom="2" zIndex="base">
-                  <Card.Body>
-                    <HStack justify="flex-end" wrap="wrap">
-                      <Button variant="outline" onClick={() => saveEditor(false)}>
-                        Сохранить черновик
-                      </Button>
-                      <Button colorPalette="orange" onClick={() => saveEditor(true)}>
-                        Опубликовать
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setEditingTaskId(null)
-                          setEditorForm(createEmptyEditorForm(now))
-                          setFormErrors([])
-                          setFieldErrors({})
-                          setScreen("tasks")
-                        }}
-                      >
-                        Отмена
-                      </Button>
-                    </HStack>
-                  </Card.Body>
-                </Card.Root>
-              </Stack>
-            ) : null}
-          </Stack>
-        </Box>
-      </Box>
-
-      <Dialog.Root
-        open={confirmDialog.open}
-        onOpenChange={(details) => setConfirmDialog((prev) => ({ ...prev, open: details.open }))}
-      >
-        <Portal>
-          <Dialog.Backdrop />
-          <Dialog.Positioner>
-            <Dialog.Content>
-              <Dialog.Header>
-                <Dialog.Title>{confirmDialog.title}</Dialog.Title>
-              </Dialog.Header>
-              <Dialog.Body>
-                <Text>{confirmDialog.body}</Text>
-              </Dialog.Body>
-              <Dialog.Footer>
-                <HStack justify="flex-end" w="full">
-                  <Button variant="outline" onClick={closeConfirmDialog}>
-                    Отмена
-                  </Button>
-                  <Button
-                    colorPalette={confirmDialog.danger ? "red" : "orange"}
-                    onClick={() => {
-                      confirmDialog.action?.()
-                      closeConfirmDialog()
-                    }}
-                  >
-                    {confirmDialog.confirmLabel}
-                  </Button>
-                </HStack>
-              </Dialog.Footer>
-            </Dialog.Content>
-          </Dialog.Positioner>
-        </Portal>
-      </Dialog.Root>
-
-      <Dialog.Root open={viewDialog.open} onOpenChange={(details) => setViewDialog((prev) => ({ ...prev, open: details.open }))}>
-        <Portal>
-          <Dialog.Backdrop />
-          <Dialog.Positioner>
-            <Dialog.Content maxW="840px">
-              <Dialog.Header>
-                <Dialog.Title>{viewDialog.title}</Dialog.Title>
-              </Dialog.Header>
-              <Dialog.Body>
-                <Box
-                  as="pre"
-                  p="3"
-                  bg="gray.900"
-                  color="green.200"
-                  rounded="md"
-                  overflow="auto"
-                  fontSize="xs"
-                  whiteSpace="pre-wrap"
-                >
-                  {viewDialog.payload}
-                </Box>
-              </Dialog.Body>
-              <Dialog.Footer>
-                <Button onClick={closeViewDialog}>Закрыть</Button>
-              </Dialog.Footer>
-            </Dialog.Content>
-          </Dialog.Positioner>
-        </Portal>
-      </Dialog.Root>
-    </Flex>
+      <Dialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, open }))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{confirmDialog.title}</DialogTitle>
+            <DialogDescription>{confirmDialog.body}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeConfirmDialog}>
+              Отмена
+            </Button>
+            <Button
+              variant={confirmDialog.danger ? "destructive" : "default"}
+              onClick={() => {
+                confirmDialog.action?.()
+                closeConfirmDialog()
+              }}
+            >
+              {confirmDialog.confirmLabel}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }
 
@@ -1698,19 +1506,42 @@ function SelectField(props: SelectFieldProps) {
   const { label, value, onChange, options } = props
 
   return (
-    <Field.Root>
-      <Field.Label>{label}</Field.Label>
-      <NativeSelect.Root>
-        <NativeSelect.Field value={value} onChange={(event) => onChange(event.target.value)}>
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger>
+          <SelectValue placeholder="Выберите значение" />
+        </SelectTrigger>
+        <SelectContent>
           {options.map((option) => (
-            <option key={option.value || "empty"} value={option.value}>
+            <SelectItem key={option.value || "empty"} value={option.value}>
               {option.label}
-            </option>
+            </SelectItem>
           ))}
-        </NativeSelect.Field>
-        <NativeSelect.Indicator />
-      </NativeSelect.Root>
-    </Field.Root>
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
+interface FieldBlockProps {
+  label: string
+  children: ReactNode
+  error?: string
+  hint?: string
+  className?: string
+}
+
+function FieldBlock(props: FieldBlockProps) {
+  const { label, children, error, hint, className } = props
+
+  return (
+    <div className={cn("space-y-2", className)}>
+      <Label>{label}</Label>
+      {children}
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      {error ? <p className="text-xs text-rose-600">{error}</p> : null}
+    </div>
   )
 }
 
