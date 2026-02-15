@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>05.ru Tasks Admin Prototype</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <p class="brand-kicker">05.RU</p>
+          <h1>Админка задач</h1>
+          <p class="brand-note">Прототип для роли маркетолога</p>
+        </div>
+
+        <nav class="nav-menu" aria-label="Основная навигация">
+          <button class="nav-link is-active" data-screen="tasks">Задания</button>
+          <button class="nav-link" data-screen="editor">Создать задание</button>
+          <button class="nav-link" data-screen="completions">Выполнение заданий</button>
+          <button class="nav-link" data-screen="users">Пользователи и очки</button>
+        </nav>
+
+        <div class="sidebar-note-box">
+          <p class="label">Автоправило PRD</p>
+          <p>Окно получения награды фиксировано: <strong>7 дней</strong> после завершения задания.</p>
+        </div>
+      </aside>
+
+      <div class="workspace">
+        <header class="topbar">
+          <div class="topbar-left">
+            <label class="search-wrap" for="globalSearch">
+              <span>Глобальный поиск</span>
+              <input
+                id="globalSearch"
+                type="search"
+                placeholder="task_code, заголовок, телефон, user_id"
+                autocomplete="off"
+              />
+            </label>
+
+            <div class="quick-filters" id="quickFilters">
+              <button class="chip is-active" data-quick-filter="all">Все</button>
+              <button class="chip" data-quick-filter="active">Только active</button>
+              <button class="chip" data-quick-filter="with_points">С очками</button>
+              <button class="chip" data-quick-filter="claim_window">Окно claim</button>
+            </div>
+          </div>
+
+          <div class="topbar-right">
+            <button id="createTaskQuick" class="btn primary" type="button">+ Новое задание</button>
+          </div>
+        </header>
+
+        <main class="content">
+          <section class="screen is-active" id="screen-tasks">
+            <div class="screen-header">
+              <div>
+                <h2>Задания</h2>
+                <p>Сортировка: высокий приоритет выше, при равенстве выше более новое задание.</p>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Фильтры</h3>
+              <div class="form-grid grid-6">
+                <label>
+                  Статус (симуляция user-view)
+                  <select id="tasksStatusFilter">
+                    <option value="all">Все</option>
+                    <option value="upcoming">upcoming</option>
+                    <option value="active">active</option>
+                    <option value="completed">completed</option>
+                    <option value="reward_claimed">reward_claimed</option>
+                    <option value="expired">expired</option>
+                  </select>
+                </label>
+
+                <label>
+                  Тип задания
+                  <select id="tasksTypeFilter"></select>
+                </label>
+
+                <label>
+                  Тип награды
+                  <select id="tasksRewardFilter"></select>
+                </label>
+
+                <label>
+                  Active c
+                  <input id="tasksDateFromFilter" type="date" />
+                </label>
+
+                <label>
+                  Active по
+                  <input id="tasksDateToFilter" type="date" />
+                </label>
+
+                <label>
+                  Очки активности
+                  <select id="tasksHasPointsFilter">
+                    <option value="all">Все</option>
+                    <option value="yes">Есть</option>
+                    <option value="no">Нет</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="form-actions">
+                <button id="tasksResetFilters" class="btn ghost" type="button">Сбросить фильтры</button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="bulk-actions">
+                <label class="inline-checkbox">
+                  <input id="selectAllTasks" type="checkbox" />
+                  Выбрать все в текущем списке
+                </label>
+
+                <span class="muted" id="selectedTasksCount">0 выбрано</span>
+
+                <input id="bulkPriority" type="number" min="0" placeholder="Новый приоритет" />
+                <button id="bulkApplyPriority" class="btn secondary" type="button">Изменить приоритет</button>
+                <button id="bulkArchive" class="btn danger" type="button">Архивировать выбранные</button>
+                <button id="tasksExportCsv" class="btn ghost" type="button">Экспорт CSV</button>
+              </div>
+
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th></th>
+                      <th>task_code</th>
+                      <th>Заголовок</th>
+                      <th>Тип задания</th>
+                      <th>Период активности</th>
+                      <th>Награды</th>
+                      <th>Приоритет</th>
+                      <th>Публикация / статус</th>
+                      <th>Действия</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tasksTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section class="screen" id="screen-editor">
+            <div class="screen-header">
+              <div>
+                <h2 id="editorTitle">Создать задание</h2>
+                <p>Поля и валидации синхронизированы с PRD для задач 1-8 и наград.</p>
+              </div>
+            </div>
+
+            <div class="panel preset-panel">
+              <h3>Быстрые сценарии (для демонстрации)</h3>
+              <div class="inline-actions">
+                <button id="presetVisitPromoPoints" class="btn secondary" type="button">
+                  Сценарий: visit_url + promocode + activity_points
+                </button>
+                <button id="presetPurchaseTask" class="btn secondary" type="button">
+                  Сценарий: purchase-задача + fixed purchase period
+                </button>
+              </div>
+            </div>
+
+            <form id="taskForm" novalidate>
+              <div class="panel hidden" id="formErrorsPanel">
+                <h3>Проверьте поля формы</h3>
+                <ul class="error-list" id="formErrors"></ul>
+              </div>
+
+              <fieldset class="panel">
+                <legend>Основное</legend>
+                <div class="form-grid grid-3">
+                  <label>
+                    task_code *
+                    <input id="taskCode" name="task_code" type="text" placeholder="TASK_CODE_001" />
+                    <small id="taskCodeHint">Уникальное значение. После публикации редактирование блокируется.</small>
+                  </label>
+
+                  <label>
+                    Заголовок *
+                    <input id="taskTitle" name="title" type="text" placeholder="Добавьте 3 товара в корзину" />
+                  </label>
+
+                  <label>
+                    Приоритет *
+                    <input id="priority" name="priority" type="number" min="0" value="50" />
+                  </label>
+                </div>
+
+                <label>
+                  Описание *
+                  <textarea id="taskDescription" name="description" rows="3" placeholder="Кратко опишите условие и пользу"></textarea>
+                </label>
+
+                <div class="form-grid grid-2">
+                  <label>
+                    Лого/изображение (upload)
+                    <input id="imageFile" type="file" accept="image/*" />
+                  </label>
+
+                  <label>
+                    Или URL изображения
+                    <input id="imageUrl" name="image_url" type="url" placeholder="https://..." />
+                  </label>
+                </div>
+
+                <div class="image-preview" id="imagePreview">Превью изображения</div>
+              </fieldset>
+
+              <fieldset class="panel">
+                <legend>Периоды</legend>
+                <div class="form-grid grid-2">
+                  <label>
+                    active_from *
+                    <input id="activeFrom" name="active_from" type="datetime-local" />
+                  </label>
+
+                  <label>
+                    active_to *
+                    <input id="activeTo" name="active_to" type="datetime-local" />
+                  </label>
+                </div>
+
+                <p class="inline-note">
+                  Окно claim после завершения задания фиксированное: <strong>7 дней</strong> (не настраивается).
+                </p>
+              </fieldset>
+
+              <fieldset class="panel">
+                <legend>Тип задания и условия</legend>
+                <div class="form-grid grid-2">
+                  <label>
+                    Тип задания *
+                    <select id="taskType" name="task_type"></select>
+                  </label>
+
+                  <label>
+                    Тип перехода к выполнению *
+                    <select id="targetType" name="target_type">
+                      <option value="internal_url">internal_url</option>
+                      <option value="external_url">external_url</option>
+                      <option value="app_screen">app_screen</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div id="conditionFields"></div>
+
+                <div class="form-grid grid-1">
+                  <label>
+                    target_value *
+                    <input id="targetValue" name="target_value" type="text" placeholder="/catalog или https://... или app://screen" />
+                  </label>
+                </div>
+
+                <div class="panel nested hidden" id="purchasePeriodSection">
+                  <h4>Фиксированный период покупок (только для purchase-заданий)</h4>
+                  <div class="form-grid grid-2">
+                    <label>
+                      purchase_period_from *
+                      <input id="purchaseFrom" name="purchase_period_from" type="date" />
+                    </label>
+
+                    <label>
+                      purchase_period_to *
+                      <input id="purchaseTo" name="purchase_period_to" type="date" />
+                    </label>
+                  </div>
+                </div>
+              </fieldset>
+
+              <fieldset class="panel">
+                <legend>Награды</legend>
+
+                <div class="inline-actions checkbox-set">
+                  <label class="inline-checkbox">
+                    <input id="rewardBonus" type="checkbox" value="bonus" />
+                    bonus
+                  </label>
+                  <label class="inline-checkbox">
+                    <input id="rewardPromocode" type="checkbox" value="promocode" />
+                    promocode
+                  </label>
+                  <label class="inline-checkbox">
+                    <input id="rewardPoints" type="checkbox" value="activity_points" />
+                    activity_points
+                  </label>
+                </div>
+
+                <div class="panel nested hidden" id="bonusSection">
+                  <h4>Параметры bonus</h4>
+                  <label>
+                    Количество бонусов
+                    <input id="bonusAmount" type="number" min="1" placeholder="100" />
+                  </label>
+                </div>
+
+                <div class="panel nested hidden" id="promoSection">
+                  <h4>Параметры promocode</h4>
+                  <div class="form-grid grid-2">
+                    <label>
+                      Код/идентификатор *
+                      <input id="promocodeCode" type="text" placeholder="SPRING-10" />
+                    </label>
+                    <label>
+                      Срок действия *
+                      <input id="promocodeValidTo" type="date" />
+                    </label>
+                  </div>
+
+                  <label>
+                    Условия *
+                    <textarea id="promocodeTerms" rows="3" placeholder="Минимальная сумма, исключения, срок"></textarea>
+                  </label>
+                </div>
+
+                <div class="panel nested hidden" id="pointsSection">
+                  <h4>Параметры activity_points</h4>
+                  <div class="form-grid grid-2">
+                    <label>
+                      Количество очков *
+                      <input id="pointsAmount" type="number" min="1" placeholder="50" />
+                    </label>
+                    <label>
+                      Срок сгорания *
+                      <input id="pointsExpireAt" type="date" />
+                    </label>
+                  </div>
+                </div>
+              </fieldset>
+
+              <fieldset class="panel">
+                <legend>Публикация и управление статусом</legend>
+                <div class="form-grid grid-2">
+                  <label>
+                    Публикация
+                    <select id="publicationState">
+                      <option value="draft">draft</option>
+                      <option value="published">published</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Симуляция user-status (для прототипа)
+                    <select id="simulatedStatus">
+                      <option value="">auto</option>
+                      <option value="upcoming">upcoming</option>
+                      <option value="active">active</option>
+                      <option value="completed">completed</option>
+                      <option value="reward_claimed">reward_claimed</option>
+                      <option value="expired">expired</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="inline-actions radio-set">
+                  <label class="inline-radio">
+                    <input type="radio" name="status_mode" value="auto" checked />
+                    Auto (рекомендуется)
+                  </label>
+
+                  <label class="inline-radio">
+                    <input type="radio" name="status_mode" value="force" />
+                    Force
+                  </label>
+                </div>
+
+                <div class="form-grid grid-1 hidden" id="forceStatusWrap">
+                  <label>
+                    Force status
+                    <select id="forcedStatus">
+                      <option value="">Выберите статус</option>
+                      <option value="upcoming">upcoming</option>
+                      <option value="active">active</option>
+                      <option value="completed">completed</option>
+                      <option value="reward_claimed">reward_claimed</option>
+                      <option value="expired">expired</option>
+                    </select>
+                  </label>
+                </div>
+
+                <p class="warning hidden" id="forceWarning">
+                  Внимание: режим Force переопределяет авто-логику PRD и должен использоваться только для служебной симуляции.
+                </p>
+              </fieldset>
+
+              <div class="form-footer">
+                <button id="saveDraftBtn" class="btn ghost" type="button">Сохранить черновик</button>
+                <button id="publishTaskBtn" class="btn primary" type="button">Опубликовать</button>
+                <button id="cancelEditBtn" class="btn secondary" type="button">Отмена</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="screen" id="screen-completions">
+            <div class="screen-header">
+              <div>
+                <h2>Выполнение заданий</h2>
+                <p>Просмотр user-status, claim window и экспорт для операционной работы.</p>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="form-grid grid-2">
+                <label>
+                  Задание
+                  <select id="completionTaskSelect"></select>
+                </label>
+
+                <div class="summary-row">
+                  <div class="summary-card">
+                    <span>completed</span>
+                    <strong id="completionSummaryCompleted">0</strong>
+                  </div>
+                  <div class="summary-card">
+                    <span>в окне claim</span>
+                    <strong id="completionSummaryClaimWindow">0</strong>
+                  </div>
+                  <div class="summary-card">
+                    <span>expired</span>
+                    <strong id="completionSummaryExpired">0</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Фильтры</h3>
+              <div class="form-grid grid-4">
+                <label>
+                  Статус пользователя
+                  <select id="completionStatusFilter">
+                    <option value="all">Все</option>
+                    <option value="upcoming">upcoming</option>
+                    <option value="active">active</option>
+                    <option value="completed">completed</option>
+                    <option value="reward_claimed">reward_claimed</option>
+                    <option value="expired">expired</option>
+                  </select>
+                </label>
+
+                <label>
+                  completed от
+                  <input id="completionDateFrom" type="date" />
+                </label>
+
+                <label>
+                  completed до
+                  <input id="completionDateTo" type="date" />
+                </label>
+
+                <label class="inline-checkbox">
+                  <input id="completionUnclaimedOnly" type="checkbox" />
+                  Только completed без claim
+                </label>
+              </div>
+
+              <div class="form-actions">
+                <button id="completionResetFilters" class="btn ghost" type="button">Сбросить фильтры</button>
+                <button id="completionExportCsv" class="btn secondary" type="button">Экспорт CSV</button>
+              </div>
+
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>user_id</th>
+                      <th>Телефон</th>
+                      <th>Текущий статус</th>
+                      <th>Дата выполнения</th>
+                      <th>Дата claim</th>
+                      <th>days_left_to_claim</th>
+                      <th>Действия</th>
+                    </tr>
+                  </thead>
+                  <tbody id="completionTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section class="screen" id="screen-users">
+            <div class="screen-header">
+              <div>
+                <h2>Пользователи и очки активности</h2>
+                <p>Контроль баланса, сгорания и источников начисления по заданиям.</p>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Фильтры</h3>
+              <div class="form-grid grid-4">
+                <label>
+                  Баланс от
+                  <input id="usersMinPoints" type="number" min="0" />
+                </label>
+
+                <label>
+                  Баланс до
+                  <input id="usersMaxPoints" type="number" min="0" />
+                </label>
+
+                <label>
+                  Сгорание в ближайшие N дней
+                  <input id="usersExpiringDays" type="number" min="1" placeholder="7" />
+                </label>
+
+                <label>
+                  Телефон
+                  <input id="usersPhoneFilter" type="search" placeholder="+7..." />
+                </label>
+              </div>
+
+              <div class="form-actions">
+                <button id="usersResetFilters" class="btn ghost" type="button">Сбросить фильтры</button>
+              </div>
+            </div>
+
+            <div class="split-layout">
+              <div class="panel">
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>user_id</th>
+                        <th>Телефон</th>
+                        <th>Доступные очки</th>
+                        <th>Сгорает скоро</th>
+                        <th>Ближайшая дата сгорания</th>
+                        <th>Выполнено заданий</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="usersTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <aside class="panel detail-panel" id="userDetailPanel">
+                <h3>Карточка пользователя</h3>
+                <p class="muted">Выберите пользователя в таблице, чтобы увидеть историю очков и задания-источники.</p>
+              </aside>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <div class="toast hidden" id="toast"></div>
+
+    <div class="modal-backdrop hidden" id="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal">
+        <h3 id="modalTitle"></h3>
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-actions">
+          <button id="modalCancel" class="btn ghost" type="button">Отмена</button>
+          <button id="modalConfirm" class="btn primary" type="button">Подтвердить</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="./mock-data.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
