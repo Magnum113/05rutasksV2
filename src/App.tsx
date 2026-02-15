@@ -15,41 +15,25 @@ import {
   Input,
   NativeSelect,
   Portal,
-  Separator,
   Stack,
   Table,
   Text,
   Textarea,
 } from "@chakra-ui/react"
+import { CLAIM_WINDOW_DAYS, DEMO_NOW_ISO, MOCK_TASKS, REWARD_TYPE_OPTIONS, TASK_TYPE_OPTIONS } from "@/admin/mockData"
 import {
-  CLAIM_WINDOW_DAYS,
-  DEMO_NOW_ISO,
-  MOCK_TASK_USER_STATES,
-  MOCK_TASKS,
-  MOCK_USERS,
-  REWARD_TYPE_OPTIONS,
-  TASK_TYPE_OPTIONS,
-} from "@/admin/mockData"
-import {
-  type PublicationState,
   type RewardType,
-  type StatusMode,
   type TargetType,
   type Task,
   type TaskCondition,
   type TaskRewardParams,
   type TaskStatus,
   type TaskType,
-  type TaskUserState,
-  type UserEntity,
 } from "@/admin/types"
 import {
   computeTaskStatus,
-  daysLeft,
   downloadCsv,
-  formatDate,
   formatDateTime,
-  getEffectiveUserStatus,
   isValidUrl,
   parseDate,
   PURCHASE_TYPES,
@@ -60,33 +44,20 @@ import {
   toLocalDateTimeInput,
 } from "@/admin/utils"
 
-type Screen = "tasks" | "editor" | "completions" | "users"
-type QuickFilter = "all" | "active" | "with_points" | "claim_window"
+type Screen = "tasks" | "editor"
+type QuickFilter = "all" | "active" | "published"
 type RewardFilter = "all" | RewardType
 type TypeFilter = "all" | TaskType
 type StatusFilter = "all" | TaskStatus
+type PublicationFilter = "all" | "draft" | "published"
 
 interface TasksFilters {
   status: StatusFilter
   type: TypeFilter
   reward: RewardFilter
+  publication: PublicationFilter
   dateFrom: string
   dateTo: string
-  hasPoints: "all" | "yes" | "no"
-}
-
-interface CompletionFilters {
-  status: StatusFilter
-  dateFrom: string
-  dateTo: string
-  unclaimedOnly: boolean
-}
-
-interface UsersFilters {
-  minPoints: string
-  maxPoints: string
-  expiringDays: string
-  phone: string
 }
 
 interface EditorForm {
@@ -103,19 +74,12 @@ interface EditorForm {
   purchase_period_from: string
   purchase_period_to: string
   priority: string
-  publication_state: PublicationState
-  status_mode: StatusMode
-  forced_status: TaskStatus | ""
-  simulated_status: TaskStatus | ""
   reward_bonus: boolean
   reward_promocode: boolean
-  reward_points: boolean
   bonus_amount: string
   promocode_code: string
   promocode_valid_to: string
   promocode_terms: string
-  points_amount: string
-  points_expire_at: string
   condition_items_count: string
   condition_min_amount: string
   condition_category_id: string
@@ -144,16 +108,6 @@ interface ViewDialogState {
   payload: string
 }
 
-interface UsersSnapshot {
-  user_id: string
-  phone: string
-  points_available: number
-  points_expiring_soon: number
-  expiry_nearest_date: string
-  completed_tasks: number
-  points_history: UserEntity["points_history"]
-}
-
 function createEmptyEditorForm(now: Date): EditorForm {
   const end = new Date(now.getTime() + 7 * 86400000)
 
@@ -171,19 +125,12 @@ function createEmptyEditorForm(now: Date): EditorForm {
     purchase_period_from: "",
     purchase_period_to: "",
     priority: "50",
-    publication_state: "draft",
-    status_mode: "auto",
-    forced_status: "",
-    simulated_status: "",
     reward_bonus: false,
     reward_promocode: false,
-    reward_points: false,
     bonus_amount: "",
     promocode_code: "",
     promocode_valid_to: "",
     promocode_terms: "",
-    points_amount: "",
-    points_expire_at: "",
     condition_items_count: "",
     condition_min_amount: "",
     condition_category_id: "",
@@ -208,21 +155,12 @@ function taskToEditorForm(task: Task): EditorForm {
     purchase_period_from: safeDateInput(task.purchase_period_from),
     purchase_period_to: safeDateInput(task.purchase_period_to),
     priority: String(task.priority),
-    publication_state: task.publication_state,
-    status_mode: task.status_mode,
-    forced_status: task.forced_status,
-    simulated_status: task.simulated_status,
     reward_bonus: task.reward_types.includes("bonus"),
     reward_promocode: task.reward_types.includes("promocode"),
-    reward_points: task.reward_types.includes("activity_points"),
     bonus_amount: task.reward_params.bonus_amount ? String(task.reward_params.bonus_amount) : "",
     promocode_code: task.reward_params.promocode_code ?? "",
     promocode_valid_to: task.reward_params.promocode_valid_to ?? "",
     promocode_terms: task.reward_params.promocode_terms ?? "",
-    points_amount: task.reward_params.activity_points_amount
-      ? String(task.reward_params.activity_points_amount)
-      : "",
-    points_expire_at: task.reward_params.activity_points_expire_at ?? "",
     condition_items_count: task.conditions.items_count ? String(task.conditions.items_count) : "",
     condition_min_amount: task.conditions.min_amount ? String(task.conditions.min_amount) : "",
     condition_category_id: task.conditions.category_id ?? "",
@@ -241,9 +179,6 @@ function buildRewardTypes(form: EditorForm): RewardType[] {
   if (form.reward_promocode) {
     rewardTypes.push("promocode")
   }
-  if (form.reward_points) {
-    rewardTypes.push("activity_points")
-  }
 
   return rewardTypes
 }
@@ -259,11 +194,6 @@ function buildRewardParams(form: EditorForm): TaskRewardParams {
     rewardParams.promocode_code = form.promocode_code.trim()
     rewardParams.promocode_valid_to = form.promocode_valid_to
     rewardParams.promocode_terms = form.promocode_terms.trim()
-  }
-
-  if (form.reward_points) {
-    rewardParams.activity_points_amount = Number(form.points_amount)
-    rewardParams.activity_points_expire_at = form.points_expire_at
   }
 
   return rewardParams
@@ -314,16 +244,13 @@ const STATUS_COLOR: Record<TaskStatus, string> = {
 const QUICK_FILTERS: Array<{ key: QuickFilter; label: string }> = [
   { key: "all", label: "Все" },
   { key: "active", label: "Только active" },
-  { key: "with_points", label: "С очками" },
-  { key: "claim_window", label: "Окно claim" },
+  { key: "published", label: "Только published" },
 ]
 
 function App() {
   const now = useMemo(() => parseDate(DEMO_NOW_ISO) ?? new Date(), [])
 
   const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS)
-  const [taskUserStates] = useState<TaskUserState[]>(MOCK_TASK_USER_STATES)
-  const [users] = useState<UserEntity[]>(MOCK_USERS)
 
   const [screen, setScreen] = useState<Screen>("tasks")
   const [globalSearch, setGlobalSearch] = useState("")
@@ -335,24 +262,9 @@ function App() {
     status: "all",
     type: "all",
     reward: "all",
+    publication: "all",
     dateFrom: "",
     dateTo: "",
-    hasPoints: "all",
-  })
-
-  const [completionTaskId, setCompletionTaskId] = useState<string>(MOCK_TASKS[0]?.id ?? "")
-  const [completionFilters, setCompletionFilters] = useState<CompletionFilters>({
-    status: "all",
-    dateFrom: "",
-    dateTo: "",
-    unclaimedOnly: false,
-  })
-
-  const [usersFilters, setUsersFilters] = useState<UsersFilters>({
-    minPoints: "",
-    maxPoints: "",
-    expiringDays: "",
-    phone: "",
   })
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
@@ -361,8 +273,6 @@ function App() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   const [flash, setFlash] = useState<FlashMessage | null>(null)
-
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
 
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
     open: false,
@@ -388,16 +298,6 @@ function App() {
     return () => clearTimeout(timeout)
   }, [flash])
 
-  useEffect(() => {
-    const activeTaskIds = tasks.filter((task) => !task.archived).map((task) => task.id)
-
-    if (!completionTaskId || !activeTaskIds.includes(completionTaskId)) {
-      setCompletionTaskId(activeTaskIds[0] ?? "")
-    }
-
-    setSelectedTaskIds((prev) => prev.filter((id) => activeTaskIds.includes(id)))
-  }, [completionTaskId, tasks])
-
   const availableTasks = useMemo(() => tasks.filter((task) => !task.archived), [tasks])
 
   const query = globalSearch.trim().toLowerCase()
@@ -411,7 +311,7 @@ function App() {
         }
       }
 
-      const status = computeTaskStatus(task, taskUserStates, now)
+      const status = computeTaskStatus(task, now)
 
       if (tasksFilters.status !== "all" && status !== tasksFilters.status) {
         return false
@@ -425,11 +325,7 @@ function App() {
         return false
       }
 
-      if (tasksFilters.hasPoints === "yes" && !task.reward_types.includes("activity_points")) {
-        return false
-      }
-
-      if (tasksFilters.hasPoints === "no" && task.reward_types.includes("activity_points")) {
+      if (tasksFilters.publication !== "all" && task.publication_state !== tasksFilters.publication) {
         return false
       }
 
@@ -453,23 +349,8 @@ function App() {
         return false
       }
 
-      if (quickFilter === "with_points" && !task.reward_types.includes("activity_points")) {
+      if (quickFilter === "published" && task.publication_state !== "published") {
         return false
-      }
-
-      if (quickFilter === "claim_window") {
-        const activeTo = parseDate(task.active_to)
-        if (!activeTo || now <= activeTo) {
-          return false
-        }
-
-        const hasWindow = taskUserStates
-          .filter((item) => item.task_id === task.id)
-          .some((item) => getEffectiveUserStatus(item, now) === "completed")
-
-        if (!hasWindow) {
-          return false
-        }
       }
 
       return true
@@ -483,178 +364,11 @@ function App() {
     })
 
     return rows
-  }, [availableTasks, now, query, quickFilter, taskUserStates, tasksFilters])
+  }, [availableTasks, now, query, quickFilter, tasksFilters])
 
   const visibleTaskIds = filteredTasks.map((task) => task.id)
   const allVisibleSelected =
     visibleTaskIds.length > 0 && visibleTaskIds.every((taskId) => selectedTaskIds.includes(taskId))
-
-  const completionBaseRows = useMemo(() => {
-    if (!completionTaskId) {
-      return []
-    }
-
-    return taskUserStates.filter((row) => row.task_id === completionTaskId)
-  }, [completionTaskId, taskUserStates])
-
-  const completionRows = useMemo(() => {
-    return completionBaseRows.filter((row) => {
-      if (query) {
-        const haystack = `${row.user_id} ${row.phone}`.toLowerCase()
-        if (!haystack.includes(query)) {
-          return false
-        }
-      }
-
-      const effectiveStatus = getEffectiveUserStatus(row, now)
-
-      if (completionFilters.status !== "all" && completionFilters.status !== effectiveStatus) {
-        return false
-      }
-
-      if (completionFilters.unclaimedOnly && !(effectiveStatus === "completed" && !row.reward_claimed_at)) {
-        return false
-      }
-
-      if (completionFilters.dateFrom && !row.completed_at) {
-        return false
-      }
-
-      if (completionFilters.dateTo && !row.completed_at) {
-        return false
-      }
-
-      if (completionFilters.dateFrom && row.completed_at) {
-        const from = parseDate(`${completionFilters.dateFrom}T00:00:00`)
-        const completedAt = parseDate(row.completed_at)
-        if (from && completedAt && completedAt < from) {
-          return false
-        }
-      }
-
-      if (completionFilters.dateTo && row.completed_at) {
-        const to = parseDate(`${completionFilters.dateTo}T23:59:59`)
-        const completedAt = parseDate(row.completed_at)
-        if (to && completedAt && completedAt > to) {
-          return false
-        }
-      }
-
-      return true
-    })
-  }, [completionBaseRows, completionFilters, now, query])
-
-  const completionSummary = useMemo(() => {
-    let completed = 0
-    let claimWindow = 0
-    let expired = 0
-
-    for (const row of completionBaseRows) {
-      const status = getEffectiveUserStatus(row, now)
-
-      if (status === "completed") {
-        completed += 1
-        const left = daysLeft(row.claim_window_until, now)
-        if (left !== null && left >= 0) {
-          claimWindow += 1
-        }
-      }
-
-      if (status === "expired") {
-        expired += 1
-      }
-    }
-
-    return { completed, claimWindow, expired }
-  }, [completionBaseRows, now])
-
-  const usersSnapshot = useMemo<UsersSnapshot[]>(() => {
-    return users.map((user) => {
-      const activeEntries = user.points_history.filter((entry) => {
-        const expiresAt = parseDate(entry.expires_at)
-        return entry.points > 0 && expiresAt && expiresAt >= now
-      })
-
-      const pointsAvailable = activeEntries.reduce((sum, entry) => sum + entry.points, 0)
-
-      const pointsExpiringSoon = activeEntries
-        .filter((entry) => {
-          const diff = daysLeft(entry.expires_at, now)
-          return diff !== null && diff >= 0 && diff <= 7
-        })
-        .reduce((sum, entry) => sum + entry.points, 0)
-
-      const nearestExpiry = activeEntries
-        .map((entry) => parseDate(entry.expires_at))
-        .filter((value): value is Date => value instanceof Date)
-        .sort((a, b) => a.getTime() - b.getTime())[0]
-
-      const completedTaskIds = new Set(
-        taskUserStates
-          .filter((row) => row.user_id === user.user_id)
-          .filter((row) => {
-            const status = getEffectiveUserStatus(row, now)
-            return ["completed", "reward_claimed", "expired"].includes(status)
-          })
-          .map((row) => row.task_id),
-      )
-
-      return {
-        user_id: user.user_id,
-        phone: user.phone,
-        points_available: pointsAvailable,
-        points_expiring_soon: pointsExpiringSoon,
-        expiry_nearest_date: nearestExpiry ? nearestExpiry.toISOString().slice(0, 10) : "",
-        completed_tasks: completedTaskIds.size,
-        points_history: user.points_history,
-      }
-    })
-  }, [now, taskUserStates, users])
-
-  const filteredUsers = useMemo(() => {
-    return usersSnapshot.filter((item) => {
-      if (query) {
-        const haystack = `${item.user_id} ${item.phone}`.toLowerCase()
-        if (!haystack.includes(query)) {
-          return false
-        }
-      }
-
-      if (usersFilters.phone && !item.phone.toLowerCase().includes(usersFilters.phone.toLowerCase())) {
-        return false
-      }
-
-      if (usersFilters.minPoints !== "" && item.points_available < Number(usersFilters.minPoints)) {
-        return false
-      }
-
-      if (usersFilters.maxPoints !== "" && item.points_available > Number(usersFilters.maxPoints)) {
-        return false
-      }
-
-      if (usersFilters.expiringDays !== "") {
-        if (!item.expiry_nearest_date) {
-          return false
-        }
-
-        const maxDays = Number(usersFilters.expiringDays)
-        const diff = daysLeft(item.expiry_nearest_date, now)
-        if (!Number.isFinite(maxDays) || diff === null || diff < 0 || diff > maxDays) {
-          return false
-        }
-      }
-
-      return true
-    })
-  }, [now, query, usersFilters, usersSnapshot])
-
-  const selectedUserSnapshot = useMemo(() => {
-    if (!selectedUserId) {
-      return null
-    }
-
-    return usersSnapshot.find((item) => item.user_id === selectedUserId) ?? null
-  }, [selectedUserId, usersSnapshot])
 
   const currentEditingTask = useMemo(() => {
     if (!editingTaskId) {
@@ -730,29 +444,11 @@ function App() {
       status: "all",
       type: "all",
       reward: "all",
+      publication: "all",
       dateFrom: "",
       dateTo: "",
-      hasPoints: "all",
     })
     setQuickFilter("all")
-  }
-
-  function resetCompletionFilters() {
-    setCompletionFilters({
-      status: "all",
-      dateFrom: "",
-      dateTo: "",
-      unclaimedOnly: false,
-    })
-  }
-
-  function resetUsersFilters() {
-    setUsersFilters({
-      minPoints: "",
-      maxPoints: "",
-      expiringDays: "",
-      phone: "",
-    })
   }
 
   function beginCreateTask() {
@@ -800,7 +496,7 @@ function App() {
   function onTaskPreview(task: Task) {
     openViewDialog(`Карточка ${task.task_code}`, {
       ...task,
-      computed_status: computeTaskStatus(task, taskUserStates, now),
+      computed_status: computeTaskStatus(task, now),
       claim_window_days: CLAIM_WINDOW_DAYS,
     })
   }
@@ -815,9 +511,6 @@ function App() {
           id: `task_${Math.random().toString(36).slice(2, 8)}_${Date.now().toString().slice(-4)}`,
           task_code: `${task.task_code}_COPY`,
           publication_state: "draft",
-          status_mode: "auto",
-          forced_status: "",
-          simulated_status: "",
           created_at: new Date().toISOString().slice(0, 16),
         }
         setTasks((prev) => [...prev, copy])
@@ -846,13 +539,15 @@ function App() {
       return
     }
 
+    const archiveCount = selectedTaskIds.length
+
     openConfirmDialog(
       "Массовая архивация",
-      `Архивировать выбранные задания: ${selectedTaskIds.length}?`,
+      `Архивировать выбранные задания: ${archiveCount}?`,
       () => {
         setTasks((prev) => prev.map((task) => (selectedTaskIds.includes(task.id) ? { ...task, archived: true } : task)))
         setSelectedTaskIds([])
-        showFlash("success", `Архивировано заданий: ${selectedTaskIds.length}`)
+        showFlash("success", `Архивировано заданий: ${archiveCount}`)
       },
       { danger: true, confirmLabel: "Архивировать" },
     )
@@ -887,8 +582,7 @@ function App() {
       reward_types: task.reward_types.join("|"),
       priority: task.priority,
       publication_state: task.publication_state,
-      status_mode: task.status_mode,
-      user_view_status: computeTaskStatus(task, taskUserStates, now),
+      task_status: computeTaskStatus(task, now),
     }))
 
     if (!rows.length) {
@@ -1029,6 +723,13 @@ function App() {
       addError("rewards", "Выберите хотя бы один тип награды")
     }
 
+    if (rewardTypes.includes("bonus")) {
+      const bonusAmount = Number(editorForm.bonus_amount)
+      if (!Number.isFinite(bonusAmount) || bonusAmount <= 0) {
+        addError("bonus_amount", "Количество бонусов должно быть > 0")
+      }
+    }
+
     if (rewardTypes.includes("promocode")) {
       if (!editorForm.promocode_code.trim()) {
         addError("promocode_code", "Код/идентификатор промокода обязателен")
@@ -1039,20 +740,6 @@ function App() {
       if (!editorForm.promocode_terms.trim()) {
         addError("promocode_terms", "Условия промокода обязательны")
       }
-    }
-
-    if (rewardTypes.includes("activity_points")) {
-      const points = Number(editorForm.points_amount)
-      if (!Number.isFinite(points) || points <= 0) {
-        addError("points_amount", "Количество очков активности должно быть > 0")
-      }
-      if (!editorForm.points_expire_at) {
-        addError("points_expire_at", "Срок сгорания очков обязателен")
-      }
-    }
-
-    if (editorForm.status_mode === "force" && !editorForm.forced_status) {
-      addError("forced_status", "При режиме Force нужно выбрать статус")
     }
 
     return { errors, fieldMap }
@@ -1072,7 +759,7 @@ function App() {
     const rewardParams = buildRewardParams(editorForm)
     const conditions = buildConditions(editorForm)
 
-    const publicationState: PublicationState = publish ? "published" : "draft"
+    const publicationState = publish ? "published" : currentEditingTask?.publication_state ?? "draft"
 
     const payload: Task = {
       id:
@@ -1086,18 +773,13 @@ function App() {
       active_to: editorForm.active_to,
       task_type: editorForm.task_type,
       conditions,
-      purchase_period_from: PURCHASE_TYPES.includes(editorForm.task_type)
-        ? editorForm.purchase_period_from
-        : null,
+      purchase_period_from: PURCHASE_TYPES.includes(editorForm.task_type) ? editorForm.purchase_period_from : null,
       purchase_period_to: PURCHASE_TYPES.includes(editorForm.task_type) ? editorForm.purchase_period_to : null,
       reward_types: rewardTypes,
       reward_params: rewardParams,
       target_type: editorForm.target_type,
       target_value: editorForm.target_value.trim(),
       priority: Number(editorForm.priority),
-      status_mode: editorForm.status_mode,
-      forced_status: editorForm.status_mode === "force" ? editorForm.forced_status : "",
-      simulated_status: editorForm.simulated_status,
       publication_state: publicationState,
       archived: false,
       created_at: editingTaskId
@@ -1118,103 +800,6 @@ function App() {
     setFormErrors([])
     setFieldErrors({})
     setScreen("tasks")
-  }
-
-  function fillPresetVisitUrlPromoPoints() {
-    setEditingTaskId(null)
-    setFormErrors([])
-    setFieldErrors({})
-    setEditorForm((prev) => ({
-      ...createEmptyEditorForm(now),
-      task_code: "VISIT_URL_PROMO_POINTS_DEMO",
-      title: "Посетить страницу акции и забрать награду",
-      description: "Сценарий для демонстрации: visit_url + promocode + activity_points",
-      task_type: "visit_url",
-      condition_url: "https://05.ru/promo/demo",
-      target_type: "internal_url",
-      target_value: "/promo/demo",
-      reward_promocode: true,
-      reward_points: true,
-      promocode_code: "DEMO-10",
-      promocode_valid_to: "2026-04-30",
-      promocode_terms: "Скидка 10% при заказе от 3000 ₽",
-      points_amount: "40",
-      points_expire_at: "2026-04-15",
-      priority: "88",
-      publication_state: prev.publication_state,
-    }))
-    setScreen("editor")
-    showFlash("info", "Заполнен сценарий visit_url + promocode + activity_points")
-  }
-
-  function fillPresetPurchaseTask() {
-    setEditingTaskId(null)
-    setFormErrors([])
-    setFieldErrors({})
-    setEditorForm((prev) => ({
-      ...createEmptyEditorForm(now),
-      task_code: "PURCHASE_FIXED_PERIOD_DEMO",
-      title: "Покупка в категории с фиксированным окном",
-      description: "Сценарий для демонстрации purchase-задачи с фиксированным purchase_period",
-      task_type: "purchase_category",
-      condition_category_id: "home-appliances",
-      condition_min_amount: "10000",
-      purchase_period_from: "2026-03-01",
-      purchase_period_to: "2026-03-15",
-      target_type: "internal_url",
-      target_value: "/catalog/home-appliances",
-      reward_bonus: true,
-      reward_points: true,
-      bonus_amount: "700",
-      points_amount: "90",
-      points_expire_at: "2026-05-01",
-      priority: "92",
-      publication_state: prev.publication_state,
-    }))
-    setScreen("editor")
-    showFlash("info", "Заполнен сценарий purchase-задачи")
-  }
-
-  function exportCompletionCsv() {
-    if (!completionRows.length) {
-      showFlash("info", "Нет строк для экспорта")
-      return
-    }
-
-    const selectedTask = tasks.find((task) => task.id === completionTaskId)
-
-    downloadCsv(
-      "task_completion_export.csv",
-      completionRows.map((row) => ({
-        task_code: selectedTask?.task_code ?? row.task_id,
-        user_id: row.user_id,
-        phone: row.phone,
-        status: getEffectiveUserStatus(row, now),
-        completed_at: row.completed_at,
-        reward_claimed_at: row.reward_claimed_at,
-        claim_window_until: row.claim_window_until,
-        days_left_to_claim: daysLeft(row.claim_window_until, now),
-      })),
-    )
-
-    showFlash("success", `CSV выгружен: ${completionRows.length} записей`)
-  }
-
-  function openCompletionCard(row: TaskUserState) {
-    const task = tasks.find((item) => item.id === row.task_id)
-
-    openViewDialog("Карточка выполнения", {
-      task_code: task?.task_code ?? row.task_id,
-      user_id: row.user_id,
-      phone: row.phone,
-      status_original: row.status,
-      status_effective: getEffectiveUserStatus(row, now),
-      completed_at: row.completed_at,
-      reward_claimed_at: row.reward_claimed_at,
-      claim_window_until: row.claim_window_until,
-      days_left_to_claim: daysLeft(row.claim_window_until, now),
-      reward_types: task?.reward_types ?? [],
-    })
   }
 
   function renderStatusBadge(status: TaskStatus) {
@@ -1249,7 +834,7 @@ function App() {
               Админка задач
             </Heading>
             <Text color="gray.300" mt="2" fontSize="sm">
-              Пример UX для разработки фичи Tasks Marketplace.
+              Интерфейс для создания и редактирования заданий.
             </Text>
           </Box>
 
@@ -1276,92 +861,59 @@ function App() {
             >
               Создать задание
             </Button>
-            <Button
-              justifyContent="flex-start"
-              variant={screen === "completions" ? "solid" : "surface"}
-              colorPalette={screen === "completions" ? "orange" : "gray"}
-              onClick={() => setScreen("completions")}
-            >
-              Выполнение заданий
-            </Button>
-            <Button
-              justifyContent="flex-start"
-              variant={screen === "users" ? "solid" : "surface"}
-              colorPalette={screen === "users" ? "orange" : "gray"}
-              onClick={() => setScreen("users")}
-            >
-              Пользователи и очки
-            </Button>
           </Stack>
-
-          <Card.Root bg="gray.800" borderColor="gray.700">
-            <Card.Body>
-              <Text fontSize="xs" textTransform="uppercase" color="orange.200" fontWeight="700" mb="2">
-                Автоправило PRD
-              </Text>
-              <Text fontSize="sm" color="gray.200">
-                Окно получения награды фиксировано: <Text as="span" fontWeight="700">7 дней</Text> после завершения задания.
-              </Text>
-            </Card.Body>
-          </Card.Root>
         </Stack>
       </Box>
 
       <Box flex="1" minW="0">
         <Box position="sticky" top="0" zIndex="docked" bg="white" borderBottomWidth="1px" p="4">
-          <Flex direction={{ base: "column", xl: "row" }} gap="3" justify="space-between" align={{ base: "stretch", xl: "center" }}>
-            <Stack gap="2" flex="1">
-              <Field.Root>
+          <Stack gap="2">
+            <Flex direction={{ base: "column", xl: "row" }} gap="3" justify="space-between" align={{ base: "stretch", xl: "end" }}>
+              <Field.Root flex="1">
                 <Field.Label>Глобальный поиск</Field.Label>
                 <Input
                   value={globalSearch}
                   onChange={(event) => setGlobalSearch(event.target.value)}
-                  placeholder="task_code, заголовок, телефон, user_id"
+                  placeholder="task_code, заголовок"
                 />
               </Field.Root>
 
-              {screen === "tasks" ? (
-                <HStack wrap="wrap" gap="2">
-                  {QUICK_FILTERS.map((item) => (
-                    <Button
-                      key={item.key}
-                      size="sm"
-                      variant={quickFilter === item.key ? "solid" : "outline"}
-                      colorPalette={quickFilter === item.key ? "orange" : "gray"}
-                      onClick={() => setQuickFilter(item.key)}
-                    >
-                      {item.label}
-                    </Button>
-                  ))}
-                </HStack>
-              ) : null}
-            </Stack>
+              <HStack alignSelf={{ base: "flex-start", xl: "end" }}>
+                <Button colorPalette="orange" onClick={beginCreateTask}>
+                  + Новое задание
+                </Button>
+              </HStack>
+            </Flex>
 
-            <HStack alignSelf={{ base: "flex-start", xl: "center" }}>
-              <Button colorPalette="orange" onClick={beginCreateTask}>
-                + Новое задание
-              </Button>
-            </HStack>
-          </Flex>
+            {screen === "tasks" ? (
+              <HStack wrap="wrap" gap="2">
+                {QUICK_FILTERS.map((item) => (
+                  <Button
+                    key={item.key}
+                    size="sm"
+                    variant={quickFilter === item.key ? "solid" : "outline"}
+                    colorPalette={quickFilter === item.key ? "orange" : "gray"}
+                    onClick={() => setQuickFilter(item.key)}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </HStack>
+            ) : null}
+          </Stack>
         </Box>
 
         <Box p={{ base: "4", lg: "6" }}>
           <Stack gap="4">
             {flash ? (
               <Card.Root
-                borderColor={
-                  flash.type === "success" ? "green.200" : flash.type === "error" ? "red.200" : "blue.200"
-                }
+                borderColor={flash.type === "success" ? "green.200" : flash.type === "error" ? "red.200" : "blue.200"}
                 bg={flash.type === "success" ? "green.50" : flash.type === "error" ? "red.50" : "blue.50"}
               >
                 <Card.Body>
                   <Text
                     color={
-                      flash.type === "success"
-                        ? "green.700"
-                        : flash.type === "error"
-                          ? "red.700"
-                          : "blue.700"
+                      flash.type === "success" ? "green.700" : flash.type === "error" ? "red.700" : "blue.700"
                     }
                   >
                     {flash.text}
@@ -1386,9 +938,12 @@ function App() {
                     <Heading size="md">Фильтры</Heading>
                   </Card.Header>
                   <Card.Body>
-                    <Grid templateColumns={{ base: "1fr", md: "repeat(2, minmax(0, 1fr))", xl: "repeat(3, minmax(0, 1fr))" }} gap="3">
+                    <Grid
+                      templateColumns={{ base: "1fr", md: "repeat(2, minmax(0, 1fr))", xl: "repeat(3, minmax(0, 1fr))" }}
+                      gap="3"
+                    >
                       <SelectField
-                        label="Статус (симуляция user-view)"
+                        label="Статус"
                         value={tasksFilters.status}
                         options={[
                           { value: "all", label: "Все" },
@@ -1423,14 +978,25 @@ function App() {
                         }
                       />
 
+                      <SelectField
+                        label="Публикация"
+                        value={tasksFilters.publication}
+                        options={[
+                          { value: "all", label: "Все" },
+                          { value: "draft", label: "draft" },
+                          { value: "published", label: "published" },
+                        ]}
+                        onChange={(value) =>
+                          setTasksFilters((prev) => ({ ...prev, publication: value as PublicationFilter }))
+                        }
+                      />
+
                       <Field.Root>
                         <Field.Label>Active c</Field.Label>
                         <Input
                           type="date"
                           value={tasksFilters.dateFrom}
-                          onChange={(event) =>
-                            setTasksFilters((prev) => ({ ...prev, dateFrom: event.target.value }))
-                          }
+                          onChange={(event) => setTasksFilters((prev) => ({ ...prev, dateFrom: event.target.value }))}
                         />
                       </Field.Root>
 
@@ -1442,19 +1008,6 @@ function App() {
                           onChange={(event) => setTasksFilters((prev) => ({ ...prev, dateTo: event.target.value }))}
                         />
                       </Field.Root>
-
-                      <SelectField
-                        label="Очки активности"
-                        value={tasksFilters.hasPoints}
-                        options={[
-                          { value: "all", label: "Все" },
-                          { value: "yes", label: "Есть" },
-                          { value: "no", label: "Нет" },
-                        ]}
-                        onChange={(value) =>
-                          setTasksFilters((prev) => ({ ...prev, hasPoints: value as TasksFilters["hasPoints"] }))
-                        }
-                      />
                     </Grid>
                   </Card.Body>
                   <Card.Footer>
@@ -1529,7 +1082,7 @@ function App() {
                               </Table.Row>
                             ) : (
                               filteredTasks.map((task) => {
-                                const status = computeTaskStatus(task, taskUserStates, now)
+                                const status = computeTaskStatus(task, now)
                                 const selected = selectedTaskIds.includes(task.id)
 
                                 return (
@@ -1537,9 +1090,7 @@ function App() {
                                     <Table.Cell>
                                       <Checkbox.Root
                                         checked={selected}
-                                        onCheckedChange={(details) =>
-                                          toggleTaskSelection(task.id, details.checked === true)
-                                        }
+                                        onCheckedChange={(details) => toggleTaskSelection(task.id, details.checked === true)}
                                       >
                                         <Checkbox.HiddenInput />
                                         <Checkbox.Control />
@@ -1573,9 +1124,6 @@ function App() {
                                           {task.publication_state}
                                         </Badge>
                                         {renderStatusBadge(status)}
-                                        <Badge colorPalette="gray" variant="outline" rounded="full">
-                                          {task.status_mode}
-                                        </Badge>
                                       </HStack>
                                     </Table.Cell>
                                     <Table.Cell>
@@ -1617,25 +1165,9 @@ function App() {
                 <Box>
                   <Heading size="lg">{editingTaskId ? "Редактировать задание" : "Создать задание"}</Heading>
                   <Text color="gray.600" mt="1">
-                    Все поля и валидации соответствуют PRD. В интерфейсе используются только компоненты Chakra UI.
+                    Заполните параметры задания и настройте награды.
                   </Text>
                 </Box>
-
-                <Card.Root>
-                  <Card.Header>
-                    <Heading size="md">Быстрые сценарии</Heading>
-                  </Card.Header>
-                  <Card.Body>
-                    <HStack wrap="wrap">
-                      <Button onClick={fillPresetVisitUrlPromoPoints} variant="outline">
-                        visit_url + promocode + activity_points
-                      </Button>
-                      <Button onClick={fillPresetPurchaseTask} variant="outline">
-                        purchase-задача + fixed purchase period
-                      </Button>
-                    </HStack>
-                  </Card.Body>
-                </Card.Root>
 
                 {formErrors.length > 0 ? (
                   <Card.Root borderColor="red.200" bg="red.50">
@@ -1790,7 +1322,7 @@ function App() {
                     <Card.Root mt="3" bg="blue.50" borderColor="blue.200">
                       <Card.Body>
                         <Text color="blue.800">
-                          Окно claim после завершения задания фиксированное: <Text as="span" fontWeight="700">7 дней</Text>{" "}
+                          Окно claim после завершения задания фиксированное: <Text as="span" fontWeight="700">{CLAIM_WINDOW_DAYS} дней</Text>{" "}
                           (не настраивается).
                         </Text>
                       </Card.Body>
@@ -1920,9 +1452,7 @@ function App() {
                             onChange={(event) => setEditorField("condition_url", event.target.value)}
                             placeholder="https://example.com"
                           />
-                          {fieldErrors.condition_url ? (
-                            <Field.ErrorText>{fieldErrors.condition_url}</Field.ErrorText>
-                          ) : null}
+                          {fieldErrors.condition_url ? <Field.ErrorText>{fieldErrors.condition_url}</Field.ErrorText> : null}
                         </Field.Root>
                       ) : null}
 
@@ -2011,22 +1541,11 @@ function App() {
 
                       <Checkbox.Root
                         checked={editorForm.reward_promocode}
-                        onCheckedChange={(details) =>
-                          setEditorField("reward_promocode", details.checked === true)
-                        }
+                        onCheckedChange={(details) => setEditorField("reward_promocode", details.checked === true)}
                       >
                         <Checkbox.HiddenInput />
                         <Checkbox.Control />
                         <Checkbox.Label>promocode</Checkbox.Label>
-                      </Checkbox.Root>
-
-                      <Checkbox.Root
-                        checked={editorForm.reward_points}
-                        onCheckedChange={(details) => setEditorField("reward_points", details.checked === true)}
-                      >
-                        <Checkbox.HiddenInput />
-                        <Checkbox.Control />
-                        <Checkbox.Label>activity_points</Checkbox.Label>
                       </Checkbox.Root>
                     </HStack>
 
@@ -2042,14 +1561,15 @@ function App() {
                           <Heading size="sm">Параметры bonus</Heading>
                         </Card.Header>
                         <Card.Body>
-                          <Field.Root>
-                            <Field.Label>Количество бонусов</Field.Label>
+                          <Field.Root invalid={Boolean(fieldErrors.bonus_amount)}>
+                            <Field.Label>Количество бонусов *</Field.Label>
                             <Input
                               type="number"
                               min="1"
                               value={editorForm.bonus_amount}
                               onChange={(event) => setEditorField("bonus_amount", event.target.value)}
                             />
+                            {fieldErrors.bonus_amount ? <Field.ErrorText>{fieldErrors.bonus_amount}</Field.ErrorText> : null}
                           </Field.Root>
                         </Card.Body>
                       </Card.Root>
@@ -2102,117 +1622,6 @@ function App() {
                         </Card.Body>
                       </Card.Root>
                     ) : null}
-
-                    {editorForm.reward_points ? (
-                      <Card.Root mt="3" bg="gray.50" borderStyle="dashed">
-                        <Card.Header>
-                          <Heading size="sm">Параметры activity_points</Heading>
-                        </Card.Header>
-                        <Card.Body>
-                          <Grid templateColumns={{ base: "1fr", lg: "repeat(2, minmax(0, 1fr))" }} gap="3">
-                            <Field.Root invalid={Boolean(fieldErrors.points_amount)}>
-                              <Field.Label>Количество очков *</Field.Label>
-                              <Input
-                                type="number"
-                                min="1"
-                                value={editorForm.points_amount}
-                                onChange={(event) => setEditorField("points_amount", event.target.value)}
-                              />
-                              {fieldErrors.points_amount ? (
-                                <Field.ErrorText>{fieldErrors.points_amount}</Field.ErrorText>
-                              ) : null}
-                            </Field.Root>
-
-                            <Field.Root invalid={Boolean(fieldErrors.points_expire_at)}>
-                              <Field.Label>Срок сгорания *</Field.Label>
-                              <Input
-                                type="date"
-                                value={editorForm.points_expire_at}
-                                onChange={(event) => setEditorField("points_expire_at", event.target.value)}
-                              />
-                              {fieldErrors.points_expire_at ? (
-                                <Field.ErrorText>{fieldErrors.points_expire_at}</Field.ErrorText>
-                              ) : null}
-                            </Field.Root>
-                          </Grid>
-                        </Card.Body>
-                      </Card.Root>
-                    ) : null}
-                  </Card.Body>
-                </Card.Root>
-
-                <Card.Root>
-                  <Card.Header>
-                    <Heading size="md">Публикация и управление статусом</Heading>
-                  </Card.Header>
-                  <Card.Body>
-                    <Grid templateColumns={{ base: "1fr", lg: "repeat(2, minmax(0, 1fr))" }} gap="3">
-                      <SelectField
-                        label="Публикация"
-                        value={editorForm.publication_state}
-                        options={[
-                          { value: "draft", label: "draft" },
-                          { value: "published", label: "published" },
-                        ]}
-                        onChange={(value) => setEditorField("publication_state", value as PublicationState)}
-                      />
-
-                      <SelectField
-                        label="Симуляция user-status"
-                        value={editorForm.simulated_status}
-                        options={[
-                          { value: "", label: "auto" },
-                          { value: "upcoming", label: "upcoming" },
-                          { value: "active", label: "active" },
-                          { value: "completed", label: "completed" },
-                          { value: "reward_claimed", label: "reward_claimed" },
-                          { value: "expired", label: "expired" },
-                        ]}
-                        onChange={(value) => setEditorField("simulated_status", value as TaskStatus | "")}
-                      />
-                    </Grid>
-
-                    <SelectField
-                      label="Режим статуса"
-                      value={editorForm.status_mode}
-                      options={[
-                        { value: "auto", label: "Auto (рекомендуется)" },
-                        { value: "force", label: "Force" },
-                      ]}
-                      onChange={(value) => setEditorField("status_mode", value as StatusMode)}
-                    />
-
-                    {editorForm.status_mode === "force" ? (
-                      <Stack mt="3" gap="3">
-                        <SelectField
-                          label="Force status"
-                          value={editorForm.forced_status}
-                          options={[
-                            { value: "", label: "Выберите статус" },
-                            { value: "upcoming", label: "upcoming" },
-                            { value: "active", label: "active" },
-                            { value: "completed", label: "completed" },
-                            { value: "reward_claimed", label: "reward_claimed" },
-                            { value: "expired", label: "expired" },
-                          ]}
-                          onChange={(value) => setEditorField("forced_status", value as TaskStatus | "")}
-                        />
-                        {fieldErrors.forced_status ? (
-                          <Text color="red.600" fontSize="sm">
-                            {fieldErrors.forced_status}
-                          </Text>
-                        ) : null}
-
-                        <Card.Root borderColor="orange.200" bg="orange.50">
-                          <Card.Body>
-                            <Text color="orange.800">
-                              Внимание: режим Force переопределяет авто-логику PRD и должен использоваться только
-                              для служебной симуляции.
-                            </Text>
-                          </Card.Body>
-                        </Card.Root>
-                      </Stack>
-                    ) : null}
                   </Card.Body>
                 </Card.Root>
 
@@ -2242,351 +1651,14 @@ function App() {
                 </Card.Root>
               </Stack>
             ) : null}
-
-            {screen === "completions" ? (
-              <Stack gap="4">
-                <Box>
-                  <Heading size="lg">Выполнение заданий</Heading>
-                  <Text color="gray.600" mt="1">
-                    Просмотр user-status, claim window и экспорт CSV.
-                  </Text>
-                </Box>
-
-                <Card.Root>
-                  <Card.Body>
-                    <Grid templateColumns={{ base: "1fr", lg: "1fr auto" }} gap="3" alignItems="end">
-                      <SelectField
-                        label="Задание"
-                        value={completionTaskId}
-                        options={availableTasks.map((task) => ({
-                          value: task.id,
-                          label: `${task.task_code} — ${task.title}`,
-                        }))}
-                        onChange={setCompletionTaskId}
-                      />
-
-                      <HStack wrap="wrap" align="stretch">
-                        <StatCard label="completed" value={completionSummary.completed} color="orange" />
-                        <StatCard label="в окне claim" value={completionSummary.claimWindow} color="blue" />
-                        <StatCard label="expired" value={completionSummary.expired} color="gray" />
-                      </HStack>
-                    </Grid>
-                  </Card.Body>
-                </Card.Root>
-
-                <Card.Root>
-                  <Card.Header>
-                    <Heading size="md">Фильтры</Heading>
-                  </Card.Header>
-                  <Card.Body>
-                    <Grid templateColumns={{ base: "1fr", md: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" }} gap="3">
-                      <SelectField
-                        label="Статус пользователя"
-                        value={completionFilters.status}
-                        options={[
-                          { value: "all", label: "Все" },
-                          { value: "upcoming", label: "upcoming" },
-                          { value: "active", label: "active" },
-                          { value: "completed", label: "completed" },
-                          { value: "reward_claimed", label: "reward_claimed" },
-                          { value: "expired", label: "expired" },
-                        ]}
-                        onChange={(value) =>
-                          setCompletionFilters((prev) => ({ ...prev, status: value as CompletionFilters["status"] }))
-                        }
-                      />
-
-                      <Field.Root>
-                        <Field.Label>completed от</Field.Label>
-                        <Input
-                          type="date"
-                          value={completionFilters.dateFrom}
-                          onChange={(event) =>
-                            setCompletionFilters((prev) => ({ ...prev, dateFrom: event.target.value }))
-                          }
-                        />
-                      </Field.Root>
-
-                      <Field.Root>
-                        <Field.Label>completed до</Field.Label>
-                        <Input
-                          type="date"
-                          value={completionFilters.dateTo}
-                          onChange={(event) =>
-                            setCompletionFilters((prev) => ({ ...prev, dateTo: event.target.value }))
-                          }
-                        />
-                      </Field.Root>
-
-                      <Box pt={{ base: "0", xl: "7" }}>
-                        <Checkbox.Root
-                          checked={completionFilters.unclaimedOnly}
-                          onCheckedChange={(details) =>
-                            setCompletionFilters((prev) => ({ ...prev, unclaimedOnly: details.checked === true }))
-                          }
-                        >
-                          <Checkbox.HiddenInput />
-                          <Checkbox.Control />
-                          <Checkbox.Label>Только completed без claim</Checkbox.Label>
-                        </Checkbox.Root>
-                      </Box>
-                    </Grid>
-
-                    <HStack mt="3" wrap="wrap">
-                      <Button variant="outline" onClick={resetCompletionFilters}>
-                        Сбросить фильтры
-                      </Button>
-                      <Button onClick={exportCompletionCsv}>Экспорт CSV</Button>
-                    </HStack>
-                  </Card.Body>
-                </Card.Root>
-
-                <Card.Root>
-                  <Card.Body>
-                    <Table.ScrollArea borderWidth="1px" rounded="md">
-                      <Table.Root size="sm" variant="line">
-                        <Table.Header>
-                          <Table.Row>
-                            <Table.ColumnHeader>user_id</Table.ColumnHeader>
-                            <Table.ColumnHeader>Телефон</Table.ColumnHeader>
-                            <Table.ColumnHeader>Текущий статус</Table.ColumnHeader>
-                            <Table.ColumnHeader>Дата выполнения</Table.ColumnHeader>
-                            <Table.ColumnHeader>Дата claim</Table.ColumnHeader>
-                            <Table.ColumnHeader>days_left_to_claim</Table.ColumnHeader>
-                            <Table.ColumnHeader>Действия</Table.ColumnHeader>
-                          </Table.Row>
-                        </Table.Header>
-                        <Table.Body>
-                          {completionRows.length === 0 ? (
-                            <Table.Row>
-                              <Table.Cell colSpan={7}>
-                                <Text color="gray.500">Нет пользователей по текущим условиям.</Text>
-                              </Table.Cell>
-                            </Table.Row>
-                          ) : (
-                            completionRows.map((row) => {
-                              const status = getEffectiveUserStatus(row, now)
-                              const left = daysLeft(row.claim_window_until, now)
-
-                              return (
-                                <Table.Row key={`${row.task_id}_${row.user_id}`}>
-                                  <Table.Cell>{row.user_id}</Table.Cell>
-                                  <Table.Cell>{row.phone}</Table.Cell>
-                                  <Table.Cell>{renderStatusBadge(status)}</Table.Cell>
-                                  <Table.Cell>{formatDateTime(row.completed_at)}</Table.Cell>
-                                  <Table.Cell>{formatDateTime(row.reward_claimed_at)}</Table.Cell>
-                                  <Table.Cell>{left === null ? "—" : Math.max(left, 0)}</Table.Cell>
-                                  <Table.Cell>
-                                    <Button size="xs" variant="outline" onClick={() => openCompletionCard(row)}>
-                                      Карточка
-                                    </Button>
-                                  </Table.Cell>
-                                </Table.Row>
-                              )
-                            })
-                          )}
-                        </Table.Body>
-                      </Table.Root>
-                    </Table.ScrollArea>
-                  </Card.Body>
-                </Card.Root>
-              </Stack>
-            ) : null}
-
-            {screen === "users" ? (
-              <Stack gap="4">
-                <Box>
-                  <Heading size="lg">Пользователи и очки активности</Heading>
-                  <Text color="gray.600" mt="1">
-                    Контроль баланса, сгорания и источников начисления.
-                  </Text>
-                </Box>
-
-                <Card.Root>
-                  <Card.Header>
-                    <Heading size="md">Фильтры</Heading>
-                  </Card.Header>
-                  <Card.Body>
-                    <Grid templateColumns={{ base: "1fr", md: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" }} gap="3">
-                      <Field.Root>
-                        <Field.Label>Баланс от</Field.Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          value={usersFilters.minPoints}
-                          onChange={(event) =>
-                            setUsersFilters((prev) => ({ ...prev, minPoints: event.target.value }))
-                          }
-                        />
-                      </Field.Root>
-
-                      <Field.Root>
-                        <Field.Label>Баланс до</Field.Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          value={usersFilters.maxPoints}
-                          onChange={(event) =>
-                            setUsersFilters((prev) => ({ ...prev, maxPoints: event.target.value }))
-                          }
-                        />
-                      </Field.Root>
-
-                      <Field.Root>
-                        <Field.Label>Сгорание в ближайшие N дней</Field.Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={usersFilters.expiringDays}
-                          onChange={(event) =>
-                            setUsersFilters((prev) => ({ ...prev, expiringDays: event.target.value }))
-                          }
-                          placeholder="7"
-                        />
-                      </Field.Root>
-
-                      <Field.Root>
-                        <Field.Label>Телефон</Field.Label>
-                        <Input
-                          value={usersFilters.phone}
-                          onChange={(event) => setUsersFilters((prev) => ({ ...prev, phone: event.target.value }))}
-                          placeholder="+7..."
-                        />
-                      </Field.Root>
-                    </Grid>
-
-                    <Button mt="3" variant="outline" onClick={resetUsersFilters}>
-                      Сбросить фильтры
-                    </Button>
-                  </Card.Body>
-                </Card.Root>
-
-                <Grid templateColumns={{ base: "1fr", xl: "2fr 1fr" }} gap="4">
-                  <Card.Root>
-                    <Card.Body>
-                      <Table.ScrollArea borderWidth="1px" rounded="md">
-                        <Table.Root size="sm" variant="line">
-                          <Table.Header>
-                            <Table.Row>
-                              <Table.ColumnHeader>user_id</Table.ColumnHeader>
-                              <Table.ColumnHeader>Телефон</Table.ColumnHeader>
-                              <Table.ColumnHeader>Доступные очки</Table.ColumnHeader>
-                              <Table.ColumnHeader>Сгорает скоро</Table.ColumnHeader>
-                              <Table.ColumnHeader>Ближайшая дата сгорания</Table.ColumnHeader>
-                              <Table.ColumnHeader>Выполнено заданий</Table.ColumnHeader>
-                              <Table.ColumnHeader />
-                            </Table.Row>
-                          </Table.Header>
-                          <Table.Body>
-                            {filteredUsers.length === 0 ? (
-                              <Table.Row>
-                                <Table.Cell colSpan={7}>
-                                  <Text color="gray.500">Нет пользователей по текущим фильтрам.</Text>
-                                </Table.Cell>
-                              </Table.Row>
-                            ) : (
-                              filteredUsers.map((item) => (
-                                <Table.Row key={item.user_id}>
-                                  <Table.Cell>{item.user_id}</Table.Cell>
-                                  <Table.Cell>{item.phone}</Table.Cell>
-                                  <Table.Cell fontWeight="700">{item.points_available}</Table.Cell>
-                                  <Table.Cell>{item.points_expiring_soon}</Table.Cell>
-                                  <Table.Cell>{formatDate(item.expiry_nearest_date)}</Table.Cell>
-                                  <Table.Cell>{item.completed_tasks}</Table.Cell>
-                                  <Table.Cell>
-                                    <Button
-                                      size="xs"
-                                      variant="outline"
-                                      onClick={() => setSelectedUserId(item.user_id)}
-                                    >
-                                      Детали
-                                    </Button>
-                                  </Table.Cell>
-                                </Table.Row>
-                              ))
-                            )}
-                          </Table.Body>
-                        </Table.Root>
-                      </Table.ScrollArea>
-                    </Card.Body>
-                  </Card.Root>
-
-                  <Card.Root>
-                    <Card.Header>
-                      <Heading size="md">Карточка пользователя</Heading>
-                    </Card.Header>
-                    <Card.Body>
-                      {!selectedUserSnapshot ? (
-                        <Text color="gray.500">Выберите пользователя в таблице.</Text>
-                      ) : (
-                        <Stack gap="4">
-                          <Stack gap="1">
-                            <InfoRow label="user_id" value={selectedUserSnapshot.user_id} />
-                            <InfoRow label="Телефон" value={selectedUserSnapshot.phone} />
-                            <InfoRow label="Доступные очки" value={String(selectedUserSnapshot.points_available)} />
-                            <InfoRow
-                              label="Сгорает скоро"
-                              value={String(selectedUserSnapshot.points_expiring_soon)}
-                            />
-                            <InfoRow
-                              label="Ближайшая дата сгорания"
-                              value={formatDate(selectedUserSnapshot.expiry_nearest_date)}
-                            />
-                            <InfoRow
-                              label="Выполнено заданий"
-                              value={String(selectedUserSnapshot.completed_tasks)}
-                            />
-                          </Stack>
-
-                          <Separator />
-
-                          <Box>
-                            <Text fontWeight="700" mb="2">
-                              История очков
-                            </Text>
-                            <Table.ScrollArea borderWidth="1px" rounded="md">
-                              <Table.Root size="sm" variant="line">
-                                <Table.Header>
-                                  <Table.Row>
-                                    <Table.ColumnHeader>Дата</Table.ColumnHeader>
-                                    <Table.ColumnHeader>Источник</Table.ColumnHeader>
-                                    <Table.ColumnHeader>Очки</Table.ColumnHeader>
-                                    <Table.ColumnHeader>Сгорание</Table.ColumnHeader>
-                                  </Table.Row>
-                                </Table.Header>
-                                <Table.Body>
-                                  {selectedUserSnapshot.points_history.length === 0 ? (
-                                    <Table.Row>
-                                      <Table.Cell colSpan={4}>
-                                        <Text color="gray.500">История отсутствует.</Text>
-                                      </Table.Cell>
-                                    </Table.Row>
-                                  ) : (
-                                    selectedUserSnapshot.points_history.map((entry) => (
-                                      <Table.Row key={entry.id}>
-                                        <Table.Cell>{formatDate(entry.date)}</Table.Cell>
-                                        <Table.Cell>{entry.task_code}</Table.Cell>
-                                        <Table.Cell>{entry.points}</Table.Cell>
-                                        <Table.Cell>{formatDate(entry.expires_at)}</Table.Cell>
-                                      </Table.Row>
-                                    ))
-                                  )}
-                                </Table.Body>
-                              </Table.Root>
-                            </Table.ScrollArea>
-                          </Box>
-                        </Stack>
-                      )}
-                    </Card.Body>
-                  </Card.Root>
-                </Grid>
-              </Stack>
-            ) : null}
           </Stack>
         </Box>
       </Box>
 
-      <Dialog.Root open={confirmDialog.open} onOpenChange={(details) => setConfirmDialog((prev) => ({ ...prev, open: details.open }))}>
+      <Dialog.Root
+        open={confirmDialog.open}
+        onOpenChange={(details) => setConfirmDialog((prev) => ({ ...prev, open: details.open }))}
+      >
         <Portal>
           <Dialog.Backdrop />
           <Dialog.Positioner>
@@ -2675,47 +1747,6 @@ function SelectField(props: SelectFieldProps) {
         <NativeSelect.Indicator />
       </NativeSelect.Root>
     </Field.Root>
-  )
-}
-
-interface StatCardProps {
-  label: string
-  value: number
-  color: string
-}
-
-function StatCard(props: StatCardProps) {
-  const { label, value, color } = props
-
-  return (
-    <Card.Root minW="120px" borderColor={`${color}.200`} bg={`${color}.50`}>
-      <Card.Body>
-        <Text fontSize="xs" textTransform="uppercase" color={`${color}.700`}>
-          {label}
-        </Text>
-        <Text fontSize="2xl" fontWeight="700">
-          {value}
-        </Text>
-      </Card.Body>
-    </Card.Root>
-  )
-}
-
-interface InfoRowProps {
-  label: string
-  value: string
-}
-
-function InfoRow(props: InfoRowProps) {
-  const { label, value } = props
-
-  return (
-    <Flex justify="space-between" gap="3">
-      <Text color="gray.600">{label}</Text>
-      <Text fontWeight="600" textAlign="right">
-        {value}
-      </Text>
-    </Flex>
   )
 }
 

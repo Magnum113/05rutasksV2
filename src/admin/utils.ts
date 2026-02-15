@@ -1,4 +1,4 @@
-import { type Task, type TaskStatus, type TaskType, type TaskUserState } from "@/admin/types"
+import { type Task, type TaskStatus, type TaskType } from "@/admin/types"
 
 export const TASK_TYPE_LABELS: Record<TaskType, string> = {
   add_to_cart: "Добавить товары в корзину",
@@ -115,26 +115,9 @@ export function downloadCsv(filename: string, rows: Array<Record<string, string 
   URL.revokeObjectURL(href)
 }
 
-export function getEffectiveUserStatus(row: TaskUserState, now: Date): TaskStatus {
-  if (row.status !== "completed") {
-    return row.status
-  }
-
-  const claimWindowEnd = parseDate(row.claim_window_until)
-  if (!claimWindowEnd) {
-    return "completed"
-  }
-
-  return now > claimWindowEnd ? "expired" : "completed"
-}
-
-export function computeTaskStatus(task: Task, rows: TaskUserState[], now: Date): TaskStatus {
-  if (task.status_mode === "force" && task.forced_status) {
-    return task.forced_status
-  }
-
-  if (task.simulated_status) {
-    return task.simulated_status
+export function computeTaskStatus(task: Task, now: Date): TaskStatus {
+  if (task.publication_state === "draft") {
+    return "upcoming"
   }
 
   const activeFrom = parseDate(task.active_from)
@@ -148,26 +131,5 @@ export function computeTaskStatus(task: Task, rows: TaskUserState[], now: Date):
     return "active"
   }
 
-  const taskRows = rows.filter((row) => row.task_id === task.id)
-
-  const hasCompleted = taskRows.some((row) => getEffectiveUserStatus(row, now) === "completed")
-  if (hasCompleted) {
-    return "completed"
-  }
-
-  const hasClaimed = taskRows.some((row) => row.status === "reward_claimed")
-  if (hasClaimed) {
-    return "reward_claimed"
-  }
-
   return "expired"
-}
-
-export function daysLeft(isoDate: string | null, now: Date): number | null {
-  const value = parseDate(isoDate)
-  if (!value) {
-    return null
-  }
-
-  return Math.ceil((value.getTime() - now.getTime()) / 86400000)
 }
