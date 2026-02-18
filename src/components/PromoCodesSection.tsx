@@ -706,7 +706,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                       <TableHead>Каналы</TableHead>
                       <TableHead>Категории</TableHead>
                       <TableHead>Ключевые слова</TableHead>
-                      <TableHead>Покупки</TableHead>
+                      <TableHead>Сколько раз применили</TableHead>
                       <TableHead>Выручка</TableHead>
                       <TableHead>Действия</TableHead>
                     </TableRow>
