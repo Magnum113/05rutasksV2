@@ -14,9 +14,11 @@ import {
   PROMO_DISCOUNT_TYPE_OPTIONS,
   type PromoFirstOrderFilter,
   formatRub,
+  formatPromoSellerList,
   MOCK_PROMO_CODES,
   normalizeKeywordList,
   PROMO_CHANNEL_LABELS,
+  PROMO_SELLER_OPTIONS,
   type PromoStatus,
   PROMO_STATUS_LABELS,
   PROMO_STATUS_OPTIONS,
@@ -75,7 +77,7 @@ interface PromoForm {
   counter: string
   per_user_limit: string
   first_order_only: boolean
-  seller_id: string
+  seller_ids: string[]
   include_category_ids: string[]
   exclude_category_ids: string[]
   include_category_scopes: Record<string, CategoryScope>
@@ -117,7 +119,7 @@ function createPromoForm(): PromoForm {
     counter: "",
     per_user_limit: "",
     first_order_only: false,
-    seller_id: "",
+    seller_ids: [],
     include_category_ids: [],
     exclude_category_ids: [],
     include_category_scopes: {},
@@ -207,7 +209,8 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
   const filteredPromos = useMemo(() => {
     const rows = promos.filter((item) => {
       if (query) {
-        const haystack = `${item.code} ${item.name} ${item.discount_id} ${item.seller_id ?? ""}`.toLowerCase()
+        const haystack =
+          `${item.code} ${item.name} ${item.discount_id} ${item.seller_ids.join(" ")} ${formatPromoSellerList(item.seller_ids)}`.toLowerCase()
         if (!haystack.includes(query)) {
           return false
         }
@@ -303,38 +306,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
     const includeSet = new Set(form.include_title_keywords.map((item) => item.toLowerCase()))
     return form.exclude_title_keywords.filter((item) => includeSet.has(item.toLowerCase()))
   }, [form.exclude_title_keywords, form.include_title_keywords])
-
-  const ruleSummary = useMemo(
-    () =>
-      buildPromoRuleSummary({
-        discount_type: form.discount_type,
-        discount_value: Number(form.discount_value) || 0,
-        max_discount: form.max_discount === "" ? null : Number(form.max_discount),
-        min_order_amount: form.min_order_amount === "" ? null : Number(form.min_order_amount),
-        channels: form.channels,
-        per_user_limit: form.per_user_limit === "" ? null : Number(form.per_user_limit),
-        first_order_only: form.first_order_only,
-        seller_id: form.seller_id.trim() || null,
-        include_category_ids: form.include_category_ids,
-        exclude_category_ids: form.exclude_category_ids,
-        include_title_keywords: form.include_title_keywords,
-        exclude_title_keywords: form.exclude_title_keywords,
-      }),
-    [
-      form.channels,
-      form.discount_type,
-      form.discount_value,
-      form.exclude_category_ids,
-      form.exclude_title_keywords,
-      form.first_order_only,
-      form.include_category_ids,
-      form.include_title_keywords,
-      form.max_discount,
-      form.min_order_amount,
-      form.per_user_limit,
-      form.seller_id,
-    ],
-  )
 
   function setFormField<K extends keyof PromoForm>(key: K, value: PromoForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -537,7 +508,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
       current_counter: 0,
       per_user_limit: form.per_user_limit === "" ? null : Number(form.per_user_limit),
       first_order_only: form.first_order_only,
-      seller_id: form.seller_id.trim() || null,
+      seller_ids: form.seller_ids,
       include_category_ids: form.include_category_ids,
       exclude_category_ids: form.exclude_category_ids,
       include_category_scopes: form.include_category_scopes,
@@ -695,7 +666,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                       "Значение скидки": item.discount_value,
                       "Максимальная скидка": item.max_discount === null ? "Без ограничения" : item.max_discount,
                       "Минимальная сумма заказа": item.min_order_amount === null ? "От любой суммы" : item.min_order_amount,
-                      "Продавец": item.seller_id ?? "Любой",
+                      "Продавцы": formatPromoSellerList(item.seller_ids),
                       "Только первый заказ": item.first_order_only ? "Да" : "Нет",
                       "Каналы": item.channels.map((channel) => PROMO_CHANNEL_LABELS[channel]).join("|"),
                       "Правила по категориям": summarizeCategoryRules(item),
@@ -729,7 +700,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                       <TableHead>Значение скидки</TableHead>
                       <TableHead>Макс. скидка</TableHead>
                       <TableHead>Мин. сумма заказа</TableHead>
-                      <TableHead>Продавец</TableHead>
+                      <TableHead>Продавцы</TableHead>
                       <TableHead>Первый заказ</TableHead>
                       <TableHead>Каналы</TableHead>
                       <TableHead>Категории</TableHead>
@@ -767,7 +738,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                           </TableCell>
                           <TableCell>{item.max_discount === null ? "Без ограничения" : formatRub(item.max_discount)}</TableCell>
                           <TableCell>{item.min_order_amount === null ? "От любой суммы" : formatRub(item.min_order_amount)}</TableCell>
-                          <TableCell>{item.seller_id ?? "Любой"}</TableCell>
+                          <TableCell>{formatPromoSellerList(item.seller_ids)}</TableCell>
                           <TableCell>{item.first_order_only ? "Да" : "Нет"}</TableCell>
                           <TableCell>{item.channels.map((channel) => PROMO_CHANNEL_LABELS[channel]).join(", ")}</TableCell>
                           <TableCell>{summarizeCategoryRules(item)}</TableCell>
@@ -929,12 +900,16 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                   />
                 </FieldBlock>
 
-                <FieldBlock label="ID продавца (опционально)">
-                  <Input
-                    value={form.seller_id}
-                    onChange={(event) => setFormField("seller_id", event.target.value)}
-                    placeholder="Например: seller-smart-inc"
+                <FieldBlock label="Продавцы (опционально)">
+                  <MultiSelectDropdown
+                    value={form.seller_ids}
+                    options={PROMO_SELLER_OPTIONS.map((option) => ({ value: option.id, label: `${option.name} (${option.id})` }))}
+                    placeholder="Любые продавцы"
+                    onChange={(next) => setFormField("seller_ids", next)}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Если выбрано несколько продавцов, промокод применяется к товарам этих продавцов.
+                  </p>
                 </FieldBlock>
 
                 <div className="space-y-2">
@@ -1054,28 +1029,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Комментарий и резюме правил</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <FieldBlock label="Внутренний комментарий">
-                <Textarea
-                  value={form.internal_comment}
-                  onChange={(event) => setFormField("internal_comment", event.target.value)}
-                  rows={3}
-                  placeholder="Внутренняя заметка для маркетинга"
-                />
-              </FieldBlock>
-
-              <Card className="border-blue-200 bg-blue-50">
-                <CardContent className="pt-6">
-                  <p className="text-sm text-blue-800">Итоговое правило: {ruleSummary}</p>
-                </CardContent>
-              </Card>
-            </CardContent>
-          </Card>
-
           <Card className="sticky bottom-2">
             <CardContent className="pt-6">
               <div className="flex flex-wrap justify-end gap-2">
@@ -1136,7 +1089,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                 />
                 <InfoRow label="Только первый заказ" value={viewPromo.first_order_only ? "Да" : "Нет"} />
                 <InfoRow label="Каналы" value={viewPromo.channels.map((channel) => PROMO_CHANNEL_LABELS[channel]).join(", ")} />
-                <InfoRow label="ID продавца" value={viewPromo.seller_id ?? "—"} />
+                <InfoRow label="Продавцы" value={formatPromoSellerList(viewPromo.seller_ids)} />
                 <InfoRow label="Включенные категории" value={viewPromo.include_category_ids.join(", ") || "—"} />
                 <InfoRow label="Исключенные категории" value={viewPromo.exclude_category_ids.join(", ") || "—"} />
                 <InfoRow label="Включающие слова" value={viewPromo.include_title_keywords.join(", ") || "—"} />
@@ -1191,6 +1144,63 @@ function PromoSelectField(props: PromoSelectFieldProps) {
           ))}
         </SelectContent>
       </Select>
+    </div>
+  )
+}
+
+interface MultiSelectDropdownProps {
+  value: string[]
+  options: Array<{ value: string; label: string }>
+  placeholder: string
+  onChange: (value: string[]) => void
+}
+
+function MultiSelectDropdown(props: MultiSelectDropdownProps) {
+  const { value, options, placeholder, onChange } = props
+  const [open, setOpen] = useState(false)
+
+  const selectedLabels = options.filter((option) => value.includes(option.value)).map((option) => option.label)
+
+  function toggleOption(optionValue: string, checked: boolean) {
+    const next = checked ? Array.from(new Set([...value, optionValue])) : value.filter((item) => item !== optionValue)
+    onChange(next)
+  }
+
+  return (
+    <div className="relative">
+      <Button type="button" variant="outline" className="w-full justify-between" onClick={() => setOpen((prev) => !prev)}>
+        <span className="truncate text-left">{selectedLabels.length > 0 ? selectedLabels.join(", ") : placeholder}</span>
+        <span className="ml-2 text-xs text-muted-foreground">{open ? "▴" : "▾"}</span>
+      </Button>
+
+      {open ? (
+        <div className="absolute z-20 mt-2 w-full rounded-md border bg-white p-2 shadow-lg">
+          <div className="mb-2 flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="ghost" onClick={() => onChange(options.map((option) => option.value))}>
+              Выбрать все
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => onChange([])}>
+              Очистить
+            </Button>
+          </div>
+
+          <div className="max-h-56 space-y-2 overflow-y-auto rounded-md border p-2">
+            {options.map((option) => (
+              <label key={option.value} className="inline-flex w-full items-center gap-2 text-sm">
+                <Checkbox
+                  checked={value.includes(option.value)}
+                  onCheckedChange={(checked) => toggleOption(option.value, checked === true)}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+
+          <Button type="button" size="sm" variant="outline" className="mt-2 w-full" onClick={() => setOpen(false)}>
+            Готово
+          </Button>
+        </div>
+      ) : null}
     </div>
   )
 }

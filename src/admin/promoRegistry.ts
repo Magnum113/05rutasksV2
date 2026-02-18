@@ -13,6 +13,11 @@ export interface PromoCategoryOption {
   coverage_with_children: number
 }
 
+export interface PromoSellerOption {
+  id: string
+  name: string
+}
+
 export interface PromoCodeEntity {
   id: string
   status: PromoStatus
@@ -30,7 +35,7 @@ export interface PromoCodeEntity {
   current_counter: number
   per_user_limit: number | null
   first_order_only: boolean
-  seller_id: string | null
+  seller_ids: string[]
   include_category_ids: string[]
   exclude_category_ids: string[]
   include_category_scopes: Record<string, CategoryScope>
@@ -76,6 +81,24 @@ export const PROMO_CHANNEL_OPTIONS: Array<{ value: PromoChannel; label: string }
   { value: "web", label: PROMO_CHANNEL_LABELS.web },
   { value: "app", label: PROMO_CHANNEL_LABELS.app },
 ]
+
+export const PROMO_SELLER_OPTIONS: PromoSellerOption[] = [
+  { id: "seller-smart-inc", name: "Smart Inc" },
+  { id: "seller-home-tech", name: "Home Tech" },
+  { id: "seller-gadget-world", name: "Gadget World" },
+  { id: "seller-kids-market", name: "Kids Market" },
+  { id: "seller-city-electro", name: "City Electro" },
+]
+
+export function formatPromoSellerList(sellerIds: string[]): string {
+  if (sellerIds.length === 0) {
+    return "Любые"
+  }
+
+  return sellerIds
+    .map((sellerId) => PROMO_SELLER_OPTIONS.find((option) => option.id === sellerId)?.name ?? sellerId)
+    .join(", ")
+}
 
 export const CATEGORY_SCOPE_OPTIONS: Array<{ value: CategoryScope; label: string }> = [
   { value: "with_children", label: "включая подкатегории" },
@@ -137,7 +160,7 @@ export const MOCK_PROMO_CODES: PromoCodeEntity[] = [
     current_counter: 412,
     per_user_limit: 1,
     first_order_only: false,
-    seller_id: null,
+    seller_ids: [],
     include_category_ids: ["cat-electronics-smartphones"],
     exclude_category_ids: ["cat-electronics-tv"],
     include_category_scopes: { "cat-electronics-smartphones": "with_children" },
@@ -166,7 +189,7 @@ export const MOCK_PROMO_CODES: PromoCodeEntity[] = [
     current_counter: 95,
     per_user_limit: null,
     first_order_only: true,
-    seller_id: null,
+    seller_ids: [],
     include_category_ids: [],
     exclude_category_ids: ["cat-kids"],
     include_category_scopes: {},
@@ -195,7 +218,7 @@ export const MOCK_PROMO_CODES: PromoCodeEntity[] = [
     current_counter: 0,
     per_user_limit: 2,
     first_order_only: false,
-    seller_id: "seller-smart-inc",
+    seller_ids: ["seller-smart-inc", "seller-home-tech"],
     include_category_ids: ["cat-home-kitchen"],
     exclude_category_ids: [],
     include_category_scopes: { "cat-home-kitchen": "self" },
@@ -293,7 +316,7 @@ export function buildPromoRuleSummary(item: {
   channels: PromoChannel[]
   per_user_limit?: number | null
   first_order_only: boolean
-  seller_id: string | null
+  seller_ids: string[]
   include_category_ids: string[]
   exclude_category_ids: string[]
   include_title_keywords: string[]
@@ -322,8 +345,8 @@ export function buildPromoRuleSummary(item: {
     parts.push("Только первый заказ")
   }
 
-  if (item.seller_id) {
-    parts.push(`Только продавец ${item.seller_id}`)
+  if (item.seller_ids.length > 0) {
+    parts.push(`Продавцы: ${formatPromoSellerList(item.seller_ids)}`)
   }
 
   if (item.include_category_ids.length > 0 || item.exclude_category_ids.length > 0) {
