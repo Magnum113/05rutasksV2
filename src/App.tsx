@@ -761,8 +761,8 @@ function App() {
         <aside className="w-full border-b bg-slate-950 p-6 text-slate-50 lg:w-72 lg:border-b-0 lg:border-r">
           <div className="space-y-6">
             <div className="space-y-2">
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-orange-300">05.RU</p>
-              <h1 className="text-2xl font-semibold">Админка задач</h1>
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#E30614]">05.RU</p>
+              <h1 className="text-2xl font-semibold">Админка маркетинга</h1>
               <p className="text-sm text-slate-300">Интерфейс для создания и редактирования заданий.</p>
             </div>
 
