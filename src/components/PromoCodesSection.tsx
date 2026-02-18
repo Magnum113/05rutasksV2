@@ -1,7 +1,6 @@
 import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useState } from "react"
 
 import {
-  buildPromoRuleSummary,
   calcCategoryCoverage,
   type CategoryScope,
   CATEGORY_SCOPE_OPTIONS,
@@ -33,14 +32,6 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -182,7 +173,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
   const [formErrors, setFormErrors] = useState<string[]>([])
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [flash, setFlash] = useState<PromoFlash | null>(null)
-  const [viewPromo, setViewPromo] = useState<PromoCodeEntity | null>(null)
 
   useEffect(() => {
     if (createSignal === 0) {
@@ -707,13 +697,12 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                       <TableHead>Ключевые слова</TableHead>
                       <TableHead>Покупки</TableHead>
                       <TableHead>Выручка</TableHead>
-                      <TableHead>Действия</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredPromos.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={18}>
+                        <TableCell colSpan={17}>
                           <p className="py-6 text-center text-sm text-muted-foreground">Промокоды не найдены.</p>
                         </TableCell>
                       </TableRow>
@@ -745,11 +734,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                           <TableCell>{summarizeTitleRules(item)}</TableCell>
                           <TableCell>{item.purchases_count}</TableCell>
                           <TableCell>{formatRub(item.revenue_total)}</TableCell>
-                          <TableCell>
-                            <Button size="sm" variant="outline" onClick={() => setViewPromo(item)}>
-                              Просмотр
-                            </Button>
-                          </TableCell>
                         </TableRow>
                       ))
                     )}
@@ -1051,70 +1035,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
         </div>
       ) : null}
 
-      <Dialog open={Boolean(viewPromo)} onOpenChange={(open) => (!open ? setViewPromo(null) : null)}>
-        <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Карточка промокода</DialogTitle>
-            <DialogDescription>Базовые поля, параметры скидки, условия и метрики промокода.</DialogDescription>
-          </DialogHeader>
-
-          {viewPromo ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <InfoRow label="Код промокода" value={viewPromo.code} />
-                <InfoRow label="Название" value={viewPromo.name} />
-                <InfoRow label="Статус" value={PROMO_STATUS_LABELS[viewPromo.status]} />
-                <InfoRow label="Дата начала" value={formatDate(viewPromo.start_date)} />
-                <InfoRow label="Дата окончания" value={formatDate(viewPromo.end_date)} />
-                <InfoRow
-                  label="Скидка"
-                  value={
-                    viewPromo.discount_type === "percent"
-                      ? viewPromo.max_discount === null
-                        ? `${viewPromo.discount_value}% (без верхнего лимита)`
-                        : `${viewPromo.discount_value}% (макс ${formatRub(viewPromo.max_discount)})`
-                      : viewPromo.max_discount === null
-                        ? `${formatRub(viewPromo.discount_value)} (без верхнего лимита)`
-                        : `${formatRub(viewPromo.discount_value)} (макс ${formatRub(viewPromo.max_discount)})`
-                  }
-                />
-                <InfoRow
-                  label="Минимальная сумма заказа"
-                  value={viewPromo.min_order_amount === null ? "От любой суммы" : formatRub(viewPromo.min_order_amount)}
-                />
-                <InfoRow label="Лимит/использовано" value={`${viewPromo.counter ?? "∞"}/${viewPromo.current_counter}`} />
-                <InfoRow
-                  label="Лимит на пользователя"
-                  value={viewPromo.per_user_limit === null ? "Без ограничения" : String(viewPromo.per_user_limit)}
-                />
-                <InfoRow label="Только первый заказ" value={viewPromo.first_order_only ? "Да" : "Нет"} />
-                <InfoRow label="Каналы" value={viewPromo.channels.map((channel) => PROMO_CHANNEL_LABELS[channel]).join(", ")} />
-                <InfoRow label="Продавцы" value={formatPromoSellerList(viewPromo.seller_ids)} />
-                <InfoRow label="Включенные категории" value={viewPromo.include_category_ids.join(", ") || "—"} />
-                <InfoRow label="Исключенные категории" value={viewPromo.exclude_category_ids.join(", ") || "—"} />
-                <InfoRow label="Включающие слова" value={viewPromo.include_title_keywords.join(", ") || "—"} />
-                <InfoRow label="Исключающие слова" value={viewPromo.exclude_title_keywords.join(", ") || "—"} />
-                <InfoRow label="Количество покупок" value={String(viewPromo.purchases_count)} />
-                <InfoRow label="Суммарная выручка" value={formatRub(viewPromo.revenue_total)} />
-              </div>
-
-              <Card className="border-blue-200 bg-blue-50">
-                <CardContent className="pt-6">
-                  <p className="text-sm text-blue-800">
-                    Итоговое правило: {buildPromoRuleSummary(viewPromo)}
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          ) : null}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setViewPromo(null)}>
-              Закрыть
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
@@ -1478,24 +1398,6 @@ function MetricCard(props: MetricCardProps) {
       <CardContent className="pt-6">
         <p className="text-sm text-muted-foreground">{title}</p>
         <p className="mt-1 text-2xl font-semibold">{value}</p>
-      </CardContent>
-    </Card>
-  )
-}
-
-interface InfoRowProps {
-  label: string
-  value: string
-}
-
-function InfoRow(props: InfoRowProps) {
-  const { label, value } = props
-
-  return (
-    <Card>
-      <CardContent className="space-y-1 pt-4">
-        <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-        <p className="text-sm font-medium break-words">{value}</p>
       </CardContent>
     </Card>
   )
