@@ -5,6 +5,7 @@ import {
   calcCategoryCoverage,
   type CategoryScope,
   CATEGORY_SCOPE_OPTIONS,
+  type PromoCategoryOption,
   type PromoChannel,
   PROMO_CHANNEL_OPTIONS,
   PROMO_CATEGORY_OPTIONS,
@@ -15,9 +16,11 @@ import {
   formatRub,
   MOCK_PROMO_CODES,
   normalizeKeywordList,
+  PROMO_CHANNEL_LABELS,
   type PromoStatus,
+  PROMO_STATUS_LABELS,
   PROMO_STATUS_OPTIONS,
-  SAMPLE_PRODUCT_TITLES,
+  PROMO_DISCOUNT_TYPE_LABELS,
   splitTokens,
   summarizeCategoryRules,
   summarizeTitleRules,
@@ -309,30 +312,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
     return form.exclude_title_keywords.filter((item) => includeSet.has(item.toLowerCase()))
   }, [form.exclude_title_keywords, form.include_title_keywords])
 
-  const titlePreview = useMemo(() => {
-    const include = form.include_title_keywords.map((item) => item.toLowerCase())
-    const exclude = form.exclude_title_keywords.map((item) => item.toLowerCase())
-
-    const isAllowed = (title: string) => {
-      const value = title.toLowerCase()
-
-      if (include.length > 0 && !include.some((part) => value.includes(part))) {
-        return false
-      }
-
-      if (exclude.some((part) => value.includes(part))) {
-        return false
-      }
-
-      return true
-    }
-
-    return {
-      allowed: SAMPLE_PRODUCT_TITLES.filter((item) => isAllowed(item)).slice(0, 4),
-      rejected: SAMPLE_PRODUCT_TITLES.filter((item) => !isAllowed(item)).slice(0, 4),
-    }
-  }, [form.exclude_title_keywords, form.include_title_keywords])
-
   const ruleSummary = useMemo(
     () =>
       buildPromoRuleSummary({
@@ -461,60 +440,60 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
     }
 
     if (!form.name.trim()) {
-      addError("name", "Поле name обязательно")
+      addError("name", "Поле «Название» обязательно")
     }
 
     if (!form.code.trim()) {
-      addError("code", "Поле code обязательно")
+      addError("code", "Поле «Код промокода» обязательно")
     }
 
     const duplicateCode = promos.find((item) => item.code.toLowerCase() === form.code.trim().toLowerCase())
     if (duplicateCode) {
-      addError("code", "Промокод с таким code уже существует")
+      addError("code", "Промокод с таким кодом уже существует")
     }
 
     if (!form.discount_id.trim()) {
-      addError("discount_id", "discount_id обязателен")
+      addError("discount_id", "Поле «ID скидки» обязательно")
     }
 
     if (!form.start_date) {
-      addError("start_date", "start_date обязателен")
+      addError("start_date", "Поле «Дата начала» обязательно")
     }
 
     if (!form.end_date) {
-      addError("end_date", "end_date обязателен")
+      addError("end_date", "Поле «Дата окончания» обязательно")
     }
 
     const startDate = parseDate(form.start_date)
     const endDate = parseDate(form.end_date)
     if (startDate && endDate && startDate > endDate) {
-      addError("end_date", "start_date не может быть позже end_date")
+      addError("end_date", "Дата начала не может быть позже даты окончания")
     }
 
     const discountValue = Number(form.discount_value)
     if (!Number.isFinite(discountValue) || discountValue <= 0) {
-      addError("discount_value", "discount_value должен быть > 0")
+      addError("discount_value", "Значение скидки должно быть больше 0")
     }
 
     const maxDiscount = Number(form.max_discount)
     if (!Number.isFinite(maxDiscount) || maxDiscount <= 0) {
-      addError("max_discount", "max_discount должен быть > 0")
+      addError("max_discount", "Максимальная скидка должна быть больше 0")
     }
 
     const minOrderAmount = Number(form.min_order_amount)
     if (!Number.isFinite(minOrderAmount) || minOrderAmount < 0) {
-      addError("min_order_amount", "min_order_amount должен быть >= 0")
+      addError("min_order_amount", "Минимальная сумма заказа должна быть не меньше 0")
     }
 
     const perUserLimit = Number(form.per_user_limit)
     if (!Number.isInteger(perUserLimit) || perUserLimit < 1) {
-      addError("per_user_limit", "per_user_limit должен быть >= 1")
+      addError("per_user_limit", "Лимит на пользователя должен быть не меньше 1")
     }
 
     if (form.counter !== "") {
       const counter = Number(form.counter)
       if (!Number.isInteger(counter) || counter < 1) {
-        addError("counter", "counter должен быть пустым или целым числом >= 1")
+        addError("counter", "Общий лимит должен быть пустым или целым числом не меньше 1")
       }
     }
 
@@ -526,11 +505,11 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
     const excludeKeywords = normalizeKeywordList(form.exclude_title_keywords)
 
     if (includeKeywords.length !== form.include_title_keywords.length) {
-      addError("include_title_keywords", "Пустые и дублирующиеся include keywords не допускаются")
+      addError("include_title_keywords", "Пустые и дублирующиеся включающие слова не допускаются")
     }
 
     if (excludeKeywords.length !== form.exclude_title_keywords.length) {
-      addError("exclude_title_keywords", "Пустые и дублирующиеся exclude keywords не допускаются")
+      addError("exclude_title_keywords", "Пустые и дублирующиеся исключающие слова не допускаются")
     }
 
     return { errors, fieldMap }
@@ -621,7 +600,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
           </div>
 
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-            <MetricCard title="Активные" value={metrics.active} />
+            <MetricCard title="Активных промокодов" value={metrics.active} />
             <MetricCard title="Покупки с промокодом" value={metrics.purchases} />
             <MetricCard title="Выручка с промокодом" value={formatRub(metrics.revenue)} />
           </div>
@@ -632,7 +611,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <FieldBlock label="code">
+                <FieldBlock label="Код промокода">
                   <Input
                     value={filters.code}
                     onChange={(event) => setFilters((prev) => ({ ...prev, code: event.target.value }))}
@@ -641,7 +620,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                 </FieldBlock>
 
                 <PromoSelectField
-                  label="status"
+                  label="Статус"
                   value={filters.status}
                   options={[{ value: "all", label: "Все" }, ...PROMO_STATUS_OPTIONS]}
                   onChange={(value) => setFilters((prev) => ({ ...prev, status: value as PromoFilters["status"] }))}
@@ -663,11 +642,11 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                   />
                 </FieldBlock>
 
-                <FieldBlock label="discount_id">
+                <FieldBlock label="ID скидки">
                   <Input
                     value={filters.discountId}
                     onChange={(event) => setFilters((prev) => ({ ...prev, discountId: event.target.value }))}
-                    placeholder="discount_1007"
+                    placeholder="Например: discount_1007"
                   />
                 </FieldBlock>
 
@@ -679,7 +658,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                 />
 
                 <PromoSelectField
-                  label="first_order_only"
+                  label="Только первый заказ"
                   value={filters.firstOrderOnly}
                   options={[
                     { value: "all", label: "Все" },
@@ -720,22 +699,22 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                   downloadCsv(
                     "promo_codes_export.csv",
                     filteredPromos.map((item) => ({
-                      code: item.code,
-                      name: item.name,
-                      status: item.status,
-                      start_date: item.start_date,
-                      end_date: item.end_date,
-                      discount_id: item.discount_id,
-                      discount_type: item.discount_type,
-                      discount_value: item.discount_value,
-                      max_discount: item.max_discount,
-                      min_order_amount: item.min_order_amount,
-                      first_order_only: item.first_order_only ? "yes" : "no",
-                      channels: item.channels.join("|"),
-                      category_rules: summarizeCategoryRules(item),
-                      title_rules: summarizeTitleRules(item),
-                      purchases_count: item.purchases_count,
-                      revenue_total: item.revenue_total,
+                      "Код промокода": item.code,
+                      "Название": item.name,
+                      "Статус": PROMO_STATUS_LABELS[item.status],
+                      "Дата начала": item.start_date,
+                      "Дата окончания": item.end_date,
+                      "ID скидки": item.discount_id,
+                      "Тип скидки": PROMO_DISCOUNT_TYPE_LABELS[item.discount_type],
+                      "Значение скидки": item.discount_value,
+                      "Максимальная скидка": item.max_discount,
+                      "Минимальная сумма заказа": item.min_order_amount,
+                      "Только первый заказ": item.first_order_only ? "Да" : "Нет",
+                      "Каналы": item.channels.map((channel) => PROMO_CHANNEL_LABELS[channel]).join("|"),
+                      "Правила по категориям": summarizeCategoryRules(item),
+                      "Правила по ключевым словам": summarizeTitleRules(item),
+                      "Количество покупок": item.purchases_count,
+                      "Суммарная выручка": item.revenue_total,
                     })),
                   )
 
@@ -753,21 +732,21 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>code</TableHead>
-                      <TableHead>name</TableHead>
-                      <TableHead>status</TableHead>
-                      <TableHead>counter/current</TableHead>
-                      <TableHead>start_date</TableHead>
-                      <TableHead>end_date</TableHead>
-                      <TableHead>discount_id</TableHead>
-                      <TableHead>discount_type</TableHead>
-                      <TableHead>discount_value</TableHead>
-                      <TableHead>max_discount</TableHead>
-                      <TableHead>min_order_amount</TableHead>
-                      <TableHead>first_order_only</TableHead>
-                      <TableHead>channels</TableHead>
+                      <TableHead>Код</TableHead>
+                      <TableHead>Название</TableHead>
+                      <TableHead>Статус</TableHead>
+                      <TableHead>Лимит/использовано</TableHead>
+                      <TableHead>Дата начала</TableHead>
+                      <TableHead>Дата окончания</TableHead>
+                      <TableHead>ID скидки</TableHead>
+                      <TableHead>Тип скидки</TableHead>
+                      <TableHead>Значение скидки</TableHead>
+                      <TableHead>Макс. скидка</TableHead>
+                      <TableHead>Мин. сумма заказа</TableHead>
+                      <TableHead>Первый заказ</TableHead>
+                      <TableHead>Каналы</TableHead>
                       <TableHead>Категории</TableHead>
-                      <TableHead>Keywords</TableHead>
+                      <TableHead>Ключевые слова</TableHead>
                       <TableHead>Покупки</TableHead>
                       <TableHead>Выручка</TableHead>
                       <TableHead>Действия</TableHead>
@@ -786,7 +765,9 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                           <TableCell className="font-semibold">{item.code}</TableCell>
                           <TableCell>{item.name}</TableCell>
                           <TableCell>
-                            <Badge className={cn("border", PROMO_STATUS_CLASS[item.status])}>{item.status}</Badge>
+                            <Badge className={cn("border", PROMO_STATUS_CLASS[item.status])}>
+                              {PROMO_STATUS_LABELS[item.status]}
+                            </Badge>
                           </TableCell>
                           <TableCell>
                             {item.counter ?? "∞"}/{item.current_counter}
@@ -794,14 +775,14 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                           <TableCell>{formatDate(item.start_date)}</TableCell>
                           <TableCell>{formatDate(item.end_date)}</TableCell>
                           <TableCell>{item.discount_id}</TableCell>
-                          <TableCell>{item.discount_type}</TableCell>
+                          <TableCell>{PROMO_DISCOUNT_TYPE_LABELS[item.discount_type]}</TableCell>
                           <TableCell>
                             {item.discount_type === "percent" ? `${item.discount_value}%` : formatRub(item.discount_value)}
                           </TableCell>
                           <TableCell>{formatRub(item.max_discount)}</TableCell>
                           <TableCell>{formatRub(item.min_order_amount)}</TableCell>
-                          <TableCell>{item.first_order_only ? "yes" : "no"}</TableCell>
-                          <TableCell>{item.channels.join(", ")}</TableCell>
+                          <TableCell>{item.first_order_only ? "Да" : "Нет"}</TableCell>
+                          <TableCell>{item.channels.map((channel) => PROMO_CHANNEL_LABELS[channel]).join(", ")}</TableCell>
                           <TableCell>{summarizeCategoryRules(item)}</TableCell>
                           <TableCell>{summarizeTitleRules(item)}</TableCell>
                           <TableCell>{item.purchases_count}</TableCell>
@@ -827,7 +808,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
           <div>
             <h2 className="text-2xl font-semibold">Создать промокод</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Конфигурация расширенных условий: каналы, категории include/exclude, keywords и лимиты.
+              Настройка расширенных условий: каналы, категории включения/исключения, ключевые слова и лимиты.
             </p>
           </div>
 
@@ -853,13 +834,13 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
             <CardContent>
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                 <PromoSelectField
-                  label="status *"
+                  label="Статус *"
                   value={form.status}
                   options={PROMO_STATUS_OPTIONS}
                   onChange={(value) => setFormField("status", value as PromoStatus)}
                 />
 
-                <FieldBlock label="name *" error={fieldErrors.name}>
+                <FieldBlock label="Название *" error={fieldErrors.name}>
                   <Input
                     value={form.name}
                     onChange={(event) => setFormField("name", event.target.value)}
@@ -867,7 +848,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                   />
                 </FieldBlock>
 
-                <FieldBlock label="code *" error={fieldErrors.code}>
+                <FieldBlock label="Код промокода *" error={fieldErrors.code}>
                   <Input
                     value={form.code}
                     onChange={(event) => setFormField("code", event.target.value)}
@@ -875,7 +856,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                   />
                 </FieldBlock>
 
-                <FieldBlock label="start_date *" error={fieldErrors.start_date}>
+                <FieldBlock label="Дата начала *" error={fieldErrors.start_date}>
                   <Input
                     type="date"
                     value={form.start_date}
@@ -883,7 +864,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                   />
                 </FieldBlock>
 
-                <FieldBlock label="end_date *" error={fieldErrors.end_date}>
+                <FieldBlock label="Дата окончания *" error={fieldErrors.end_date}>
                   <Input
                     type="date"
                     value={form.end_date}
@@ -891,11 +872,11 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                   />
                 </FieldBlock>
 
-                <FieldBlock label="discount_id *" error={fieldErrors.discount_id}>
+                <FieldBlock label="ID скидки *" error={fieldErrors.discount_id}>
                   <Input
                     value={form.discount_id}
                     onChange={(event) => setFormField("discount_id", event.target.value)}
-                    placeholder="discount_1007"
+                    placeholder="Например: discount_1007"
                   />
                 </FieldBlock>
               </div>
@@ -909,13 +890,13 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
             <CardContent className="space-y-3">
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                 <PromoSelectField
-                  label="discount_type *"
+                  label="Тип скидки *"
                   value={form.discount_type}
                   options={PROMO_DISCOUNT_TYPE_OPTIONS}
                   onChange={(value) => setFormField("discount_type", value as PromoDiscountType)}
                 />
 
-                <FieldBlock label="discount_value *" error={fieldErrors.discount_value}>
+                <FieldBlock label="Значение скидки *" error={fieldErrors.discount_value}>
                   <Input
                     type="number"
                     min="1"
@@ -924,7 +905,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                   />
                 </FieldBlock>
 
-                <FieldBlock label="max_discount *" error={fieldErrors.max_discount}>
+                <FieldBlock label="Максимальная скидка *" error={fieldErrors.max_discount}>
                   <Input
                     type="number"
                     min="1"
@@ -933,7 +914,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                   />
                 </FieldBlock>
 
-                <FieldBlock label="min_order_amount *" error={fieldErrors.min_order_amount}>
+                <FieldBlock label="Минимальная сумма заказа *" error={fieldErrors.min_order_amount}>
                   <Input
                     type="number"
                     min="0"
@@ -942,17 +923,17 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                   />
                 </FieldBlock>
 
-                <FieldBlock label="counter (пусто = безлимит)" error={fieldErrors.counter}>
+                <FieldBlock label="Общий лимит применений (пусто = безлимит)" error={fieldErrors.counter}>
                   <Input
                     type="number"
                     min="1"
                     value={form.counter}
                     onChange={(event) => setFormField("counter", event.target.value)}
-                    placeholder="например 1000"
+                    placeholder="Например: 1000"
                   />
                 </FieldBlock>
 
-                <FieldBlock label="per_user_limit *" error={fieldErrors.per_user_limit}>
+                <FieldBlock label="Лимит применений на пользователя *" error={fieldErrors.per_user_limit}>
                   <Input
                     type="number"
                     min="1"
@@ -961,16 +942,16 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                   />
                 </FieldBlock>
 
-                <FieldBlock label="seller_id (nullable)">
+                <FieldBlock label="ID продавца (опционально)">
                   <Input
                     value={form.seller_id}
                     onChange={(event) => setFormField("seller_id", event.target.value)}
-                    placeholder="seller-smart-inc"
+                    placeholder="Например: seller-smart-inc"
                   />
                 </FieldBlock>
 
                 <div className="space-y-2">
-                  <Label>first_order_only</Label>
+                  <Label>Только для первого заказа</Label>
                   <label className="inline-flex items-center gap-2 text-sm font-medium">
                     <Checkbox
                       checked={form.first_order_only}
@@ -982,7 +963,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
               </div>
 
               <div className="space-y-2">
-                <Label>channels * (минимум 1)</Label>
+                <Label>Каналы применения * (минимум 1)</Label>
                 <div className="flex flex-wrap gap-4 rounded-md border bg-slate-50 p-3">
                   {PROMO_CHANNEL_OPTIONS.map((option) => (
                     <label key={option.value} className="inline-flex items-center gap-2 text-sm font-medium">
@@ -1025,20 +1006,21 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <Card className="border-blue-200 bg-blue-50">
                   <CardContent className="pt-6">
-                    <p className="text-sm text-blue-800">category_inclusion_preview: {includeCoveragePreview}</p>
+                    <p className="text-sm text-blue-800">Охват включенных категорий: {includeCoveragePreview}</p>
                   </CardContent>
                 </Card>
 
                 <Card className="border-blue-200 bg-blue-50">
                   <CardContent className="pt-6">
-                    <p className="text-sm text-blue-800">category_exclusion_preview: {excludeCoveragePreview}</p>
+                    <p className="text-sm text-blue-800">Охват исключенных категорий: {excludeCoveragePreview}</p>
                   </CardContent>
                 </Card>
               </div>
 
               {categoryConflicts.length > 0 ? (
                 <p className="text-sm text-amber-700">
-                  Пересечения include/exclude категорий: {categoryConflicts.join(", ")}. Приоритет у exclude.
+                  Есть пересечения между включенными и исключенными категориями: {categoryConflicts.join(", ")}.
+                  Приоритет у исключения.
                 </p>
               ) : null}
             </CardContent>
@@ -1051,17 +1033,17 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
             <CardContent className="space-y-3">
               <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                 <TokenInput
-                  label="include_title_keywords"
+                  label="Включить слова в названии"
                   values={form.include_title_keywords}
-                  placeholder="galaxy, iphone"
+                  placeholder="смартфон, iphone"
                   error={fieldErrors.include_title_keywords}
                   onChange={(values) => setFormField("include_title_keywords", values)}
                 />
 
                 <TokenInput
-                  label="exclude_title_keywords"
+                  label="Исключить слова в названии"
                   values={form.exclude_title_keywords}
-                  placeholder="refurbished, уценка"
+                  placeholder="уценка, восстановленный"
                   error={fieldErrors.exclude_title_keywords}
                   onChange={(values) => setFormField("exclude_title_keywords", values)}
                 />
@@ -1069,45 +1051,10 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
 
               {keywordConflicts.length > 0 ? (
                 <p className="text-sm text-amber-700">
-                  Конфликт include/exclude keywords: {keywordConflicts.join(", ")}. Приоритет у exclude.
+                  Конфликт между включающими и исключающими словами: {keywordConflicts.join(", ")}.
+                  Приоритет у исключения.
                 </p>
               ) : null}
-
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <Card className="border-slate-200 bg-slate-50">
-                  <CardHeader>
-                    <CardTitle className="text-base">title_keywords_preview: проходит</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {titlePreview.allowed.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Нет примеров</p>
-                    ) : (
-                      <ul className="list-disc space-y-1 pl-5 text-sm">
-                        {titlePreview.allowed.map((item) => (
-                          <li key={item}>{item}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card className="border-slate-200 bg-slate-50">
-                  <CardHeader>
-                    <CardTitle className="text-base">title_keywords_preview: исключено</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {titlePreview.rejected.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Нет примеров</p>
-                    ) : (
-                      <ul className="list-disc space-y-1 pl-5 text-sm">
-                        {titlePreview.rejected.map((item) => (
-                          <li key={item}>{item}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
             </CardContent>
           </Card>
 
@@ -1116,7 +1063,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
               <CardTitle>Комментарий и резюме правил</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <FieldBlock label="internal_comment">
+              <FieldBlock label="Внутренний комментарий">
                 <Textarea
                   value={form.internal_comment}
                   onChange={(event) => setFormField("internal_comment", event.target.value)}
@@ -1127,7 +1074,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
 
               <Card className="border-blue-200 bg-blue-50">
                 <CardContent className="pt-6">
-                  <p className="text-sm text-blue-800">rule_summary: {ruleSummary}</p>
+                  <p className="text-sm text-blue-800">Итоговое правило: {ruleSummary}</p>
                 </CardContent>
               </Card>
             </CardContent>
@@ -1165,38 +1112,38 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
           {viewPromo ? (
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <InfoRow label="code" value={viewPromo.code} />
-                <InfoRow label="name" value={viewPromo.name} />
-                <InfoRow label="status" value={viewPromo.status} />
-                <InfoRow label="discount_id" value={viewPromo.discount_id} />
-                <InfoRow label="start_date" value={formatDate(viewPromo.start_date)} />
-                <InfoRow label="end_date" value={formatDate(viewPromo.end_date)} />
+                <InfoRow label="Код промокода" value={viewPromo.code} />
+                <InfoRow label="Название" value={viewPromo.name} />
+                <InfoRow label="Статус" value={PROMO_STATUS_LABELS[viewPromo.status]} />
+                <InfoRow label="ID скидки" value={viewPromo.discount_id} />
+                <InfoRow label="Дата начала" value={formatDate(viewPromo.start_date)} />
+                <InfoRow label="Дата окончания" value={formatDate(viewPromo.end_date)} />
                 <InfoRow
-                  label="discount"
+                  label="Скидка"
                   value={
                     viewPromo.discount_type === "percent"
-                      ? `${viewPromo.discount_value}% (max ${formatRub(viewPromo.max_discount)})`
-                      : `${formatRub(viewPromo.discount_value)} (max ${formatRub(viewPromo.max_discount)})`
+                      ? `${viewPromo.discount_value}% (макс ${formatRub(viewPromo.max_discount)})`
+                      : `${formatRub(viewPromo.discount_value)} (макс ${formatRub(viewPromo.max_discount)})`
                   }
                 />
-                <InfoRow label="min_order_amount" value={formatRub(viewPromo.min_order_amount)} />
-                <InfoRow label="counter/current_counter" value={`${viewPromo.counter ?? "∞"}/${viewPromo.current_counter}`} />
-                <InfoRow label="per_user_limit" value={String(viewPromo.per_user_limit)} />
-                <InfoRow label="first_order_only" value={viewPromo.first_order_only ? "yes" : "no"} />
-                <InfoRow label="channels" value={viewPromo.channels.join(", ")} />
-                <InfoRow label="seller_id" value={viewPromo.seller_id ?? "—"} />
-                <InfoRow label="include_category_ids" value={viewPromo.include_category_ids.join(", ") || "—"} />
-                <InfoRow label="exclude_category_ids" value={viewPromo.exclude_category_ids.join(", ") || "—"} />
-                <InfoRow label="include_title_keywords" value={viewPromo.include_title_keywords.join(", ") || "—"} />
-                <InfoRow label="exclude_title_keywords" value={viewPromo.exclude_title_keywords.join(", ") || "—"} />
-                <InfoRow label="purchases_count" value={String(viewPromo.purchases_count)} />
-                <InfoRow label="revenue_total" value={formatRub(viewPromo.revenue_total)} />
+                <InfoRow label="Минимальная сумма заказа" value={formatRub(viewPromo.min_order_amount)} />
+                <InfoRow label="Лимит/использовано" value={`${viewPromo.counter ?? "∞"}/${viewPromo.current_counter}`} />
+                <InfoRow label="Лимит на пользователя" value={String(viewPromo.per_user_limit)} />
+                <InfoRow label="Только первый заказ" value={viewPromo.first_order_only ? "Да" : "Нет"} />
+                <InfoRow label="Каналы" value={viewPromo.channels.map((channel) => PROMO_CHANNEL_LABELS[channel]).join(", ")} />
+                <InfoRow label="ID продавца" value={viewPromo.seller_id ?? "—"} />
+                <InfoRow label="Включенные категории" value={viewPromo.include_category_ids.join(", ") || "—"} />
+                <InfoRow label="Исключенные категории" value={viewPromo.exclude_category_ids.join(", ") || "—"} />
+                <InfoRow label="Включающие слова" value={viewPromo.include_title_keywords.join(", ") || "—"} />
+                <InfoRow label="Исключающие слова" value={viewPromo.exclude_title_keywords.join(", ") || "—"} />
+                <InfoRow label="Количество покупок" value={String(viewPromo.purchases_count)} />
+                <InfoRow label="Суммарная выручка" value={formatRub(viewPromo.revenue_total)} />
               </div>
 
               <Card className="border-blue-200 bg-blue-50">
                 <CardContent className="pt-6">
                   <p className="text-sm text-blue-800">
-                    rule_summary: {buildPromoRuleSummary(viewPromo)}
+                    Итоговое правило: {buildPromoRuleSummary(viewPromo)}
                   </p>
                 </CardContent>
               </Card>
@@ -1229,7 +1176,7 @@ function PromoSelectField(props: PromoSelectFieldProps) {
       <Label>{label}</Label>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger>
-          <SelectValue placeholder="Выберите значение" />
+          <SelectValue placeholder="Выберите вариант" />
         </SelectTrigger>
         <SelectContent>
           {options.map((option) => (
@@ -1254,18 +1201,136 @@ interface CategoryRuleSelectorProps {
 function CategoryRuleSelector(props: CategoryRuleSelectorProps) {
   const { title, selectedIds, scopes, onToggle, onScopeChange } = props
   const [query, setQuery] = useState("")
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(
+    () => new Set(PROMO_CATEGORY_OPTIONS.filter((item) => !item.parent_id).map((item) => item.id)),
+  )
 
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
-    if (!normalized) {
-      return PROMO_CATEGORY_OPTIONS
+  const normalizedQuery = query.trim().toLowerCase()
+
+  const childrenByParent = useMemo(() => {
+    const map = new Map<string, PromoCategoryOption[]>()
+    const rootKey = "__root__"
+
+    for (const item of PROMO_CATEGORY_OPTIONS) {
+      const parentKey = item.parent_id ?? rootKey
+      const group = map.get(parentKey) ?? []
+      group.push(item)
+      map.set(parentKey, group)
     }
 
-    return PROMO_CATEGORY_OPTIONS.filter((item) => {
-      const haystack = `${item.id} ${item.name}`.toLowerCase()
-      return haystack.includes(normalized)
+    for (const group of map.values()) {
+      group.sort((a, b) => a.name.localeCompare(b.name, "ru-RU"))
+    }
+
+    return { map, rootKey }
+  }, [])
+
+  const visibleInTree = useMemo(() => {
+    const state = new Map<string, boolean>()
+
+    const walk = (nodeId: string): boolean => {
+      const current = CATEGORY_BY_ID.get(nodeId)
+      if (!current) {
+        state.set(nodeId, false)
+        return false
+      }
+
+      const selfMatches =
+        normalizedQuery.length === 0 || `${current.id} ${current.name}`.toLowerCase().includes(normalizedQuery)
+
+      const children = childrenByParent.map.get(nodeId) ?? []
+      const childMatches = children.some((child) => walk(child.id))
+      const visible = selfMatches || childMatches
+
+      state.set(nodeId, visible)
+      return visible
+    }
+
+    const roots = childrenByParent.map.get(childrenByParent.rootKey) ?? []
+    for (const root of roots) {
+      walk(root.id)
+    }
+
+    return state
+  }, [childrenByParent, normalizedQuery])
+
+  const rootNodes = childrenByParent.map.get(childrenByParent.rootKey) ?? []
+
+  const visibleRoots = rootNodes.filter((root) => visibleInTree.get(root.id))
+
+  const toggleExpanded = (categoryId: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(categoryId)) {
+        next.delete(categoryId)
+      } else {
+        next.add(categoryId)
+      }
+      return next
     })
-  }, [query])
+  }
+
+  const renderNode = (item: PromoCategoryOption, depth: number): ReactNode => {
+    if (!visibleInTree.get(item.id)) {
+      return null
+    }
+
+    const checked = selectedIds.includes(item.id)
+    const children = childrenByParent.map.get(item.id) ?? []
+    const visibleChildren = children.filter((child) => visibleInTree.get(child.id))
+    const hasChildren = visibleChildren.length > 0
+    const expanded = normalizedQuery ? true : expandedIds.has(item.id)
+
+    return (
+      <div key={item.id} className="space-y-2 rounded-md border p-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2" style={{ paddingLeft: `${depth * 16}px` }}>
+            {hasChildren ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 text-slate-700"
+                onClick={() => toggleExpanded(item.id)}
+                aria-label={expanded ? "Свернуть подкатегории" : "Развернуть подкатегории"}
+              >
+                {expanded ? "▾" : "▸"}
+              </Button>
+            ) : (
+              <span className="inline-block h-6 w-6" />
+            )}
+
+            <label className="inline-flex items-center gap-2 text-sm font-medium">
+              <Checkbox checked={checked} onCheckedChange={(value) => onToggle(item.id, value === true)} />
+              <span>
+                {item.name} <span className="text-xs text-muted-foreground">({item.id})</span>
+              </span>
+            </label>
+          </div>
+
+          {checked ? (
+            <Select
+              value={scopes[item.id] ?? "with_children"}
+              onValueChange={(value) => onScopeChange(item.id, value as CategoryScope)}
+            >
+              <SelectTrigger className="w-[220px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORY_SCOPE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+        </div>
+
+        {hasChildren && expanded ? <div className="space-y-2">{visibleChildren.map((child) => renderNode(child, depth + 1))}</div> : null}
+      </div>
+    )
+  }
 
   return (
     <Card className="border-dashed bg-slate-50">
@@ -1273,7 +1338,7 @@ function CategoryRuleSelector(props: CategoryRuleSelectorProps) {
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <FieldBlock label="Поиск по id/названию">
+        <FieldBlock label="Поиск по ID или названию">
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -1281,40 +1346,12 @@ function CategoryRuleSelector(props: CategoryRuleSelectorProps) {
           />
         </FieldBlock>
 
-        <div className="max-h-56 space-y-2 overflow-y-auto rounded-md border bg-white p-2">
-          {filtered.map((item) => {
-            const checked = selectedIds.includes(item.id)
-            return (
-              <div key={item.id} className="rounded-md border p-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label className="inline-flex items-center gap-2 text-sm font-medium">
-                    <Checkbox checked={checked} onCheckedChange={(value) => onToggle(item.id, value === true)} />
-                    <span style={{ paddingLeft: `${item.level * 14}px` }}>
-                      {item.name} <span className="text-xs text-muted-foreground">({item.id})</span>
-                    </span>
-                  </label>
-
-                  {checked ? (
-                    <Select
-                      value={scopes[item.id] ?? "with_children"}
-                      onValueChange={(value) => onScopeChange(item.id, value as CategoryScope)}
-                    >
-                      <SelectTrigger className="w-[220px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CATEGORY_SCOPE_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : null}
-                </div>
-              </div>
-            )
-          })}
+        <div className="max-h-72 space-y-2 overflow-y-auto rounded-md border bg-white p-2">
+          {visibleRoots.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Категории по запросу не найдены</p>
+          ) : (
+            visibleRoots.map((root) => renderNode(root, 0))
+          )}
         </div>
 
         <div className="flex flex-wrap gap-2">

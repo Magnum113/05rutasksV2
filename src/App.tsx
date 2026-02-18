@@ -764,7 +764,7 @@ function App() {
 
   const topActionLabel = screen === "promo" ? "+ Новый промокод" : "+ Новое задание"
   const globalSearchPlaceholder =
-    screen === "promo" ? "code, name, discount_id, seller_id" : "task_code, заголовок"
+    screen === "promo" ? "код, название, ID скидки, ID продавца" : "task_code, заголовок"
   const onTopActionClick = screen === "promo" ? beginCreatePromo : beginCreateTask
 
   return (

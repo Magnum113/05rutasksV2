@@ -43,22 +43,40 @@ export interface PromoCodeEntity {
   created_at: string
 }
 
+export const PROMO_STATUS_LABELS: Record<PromoStatus, string> = {
+  draft: "Черновик",
+  active: "Активен",
+  inactive: "Неактивен",
+  expired: "Завершен",
+}
+
+export const PROMO_DISCOUNT_TYPE_LABELS: Record<PromoDiscountType, string> = {
+  percent: "Процент",
+  fixed: "Фиксированная сумма",
+}
+
+export const PROMO_CHANNEL_LABELS: Record<PromoChannel, string> = {
+  web: "Веб",
+  mobile_app: "Мобильное приложение",
+  mobile_web: "Мобильный веб",
+}
+
 export const PROMO_STATUS_OPTIONS: Array<{ value: PromoStatus; label: string }> = [
-  { value: "draft", label: "draft" },
-  { value: "active", label: "active" },
-  { value: "inactive", label: "inactive" },
-  { value: "expired", label: "expired" },
+  { value: "draft", label: PROMO_STATUS_LABELS.draft },
+  { value: "active", label: PROMO_STATUS_LABELS.active },
+  { value: "inactive", label: PROMO_STATUS_LABELS.inactive },
+  { value: "expired", label: PROMO_STATUS_LABELS.expired },
 ]
 
 export const PROMO_DISCOUNT_TYPE_OPTIONS: Array<{ value: PromoDiscountType; label: string }> = [
-  { value: "percent", label: "percent" },
-  { value: "fixed", label: "fixed" },
+  { value: "percent", label: PROMO_DISCOUNT_TYPE_LABELS.percent },
+  { value: "fixed", label: PROMO_DISCOUNT_TYPE_LABELS.fixed },
 ]
 
 export const PROMO_CHANNEL_OPTIONS: Array<{ value: PromoChannel; label: string }> = [
-  { value: "web", label: "web" },
-  { value: "mobile_app", label: "mobile_app" },
-  { value: "mobile_web", label: "mobile_web" },
+  { value: "web", label: PROMO_CHANNEL_LABELS.web },
+  { value: "mobile_app", label: PROMO_CHANNEL_LABELS.mobile_app },
+  { value: "mobile_web", label: PROMO_CHANNEL_LABELS.mobile_web },
 ]
 
 export const CATEGORY_SCOPE_OPTIONS: Array<{ value: CategoryScope; label: string }> = [
@@ -128,7 +146,7 @@ export const MOCK_PROMO_CODES: PromoCodeEntity[] = [
     exclude_category_scopes: { "cat-electronics-tv": "with_children" },
     include_title_keywords: ["galaxy", "iphone"],
     exclude_title_keywords: ["refurbished"],
-    internal_comment: "Проверить performance по каналам через 7 дней",
+    internal_comment: "Проверить эффективность по каналам через 7 дней",
     purchases_count: 287,
     revenue_total: 4273500,
     created_at: "2026-02-05T12:10:00",
@@ -136,7 +154,7 @@ export const MOCK_PROMO_CODES: PromoCodeEntity[] = [
   {
     id: "promo_002",
     status: "active",
-    name: "Первый заказ mobile app",
+    name: "Первый заказ в мобильном приложении",
     code: "FIRSTAPP",
     start_date: "2026-02-01",
     end_date: "2026-04-01",
@@ -157,7 +175,7 @@ export const MOCK_PROMO_CODES: PromoCodeEntity[] = [
     exclude_category_scopes: { "cat-kids": "with_children" },
     include_title_keywords: [],
     exclude_title_keywords: ["уценка"],
-    internal_comment: "Безлимитный общий лимит, проверить fraud",
+    internal_comment: "Безлимитный общий лимит, проверить риски мошенничества",
     purchases_count: 95,
     revenue_total: 1210400,
     created_at: "2026-01-28T09:20:00",
@@ -237,7 +255,7 @@ export function summarizeCategoryRules(item: {
     return "Без категорийных ограничений"
   }
 
-  return `include: ${includeCount}, exclude: ${excludeCount}`
+  return `Включено: ${includeCount}, исключено: ${excludeCount}`
 }
 
 export function summarizeTitleRules(item: {
@@ -248,10 +266,10 @@ export function summarizeTitleRules(item: {
   const excludeCount = item.exclude_title_keywords.length
 
   if (includeCount === 0 && excludeCount === 0) {
-    return "Нет keyword-правил"
+    return "Нет правил по ключевым словам"
   }
 
-  return `+${includeCount} / -${excludeCount}`
+  return `Включено: ${includeCount}, исключено: ${excludeCount}`
 }
 
 export function calcCategoryCoverage(
@@ -290,7 +308,7 @@ export function buildPromoRuleSummary(item: {
   const parts = [
     `Скидка: ${discountText}`,
     `Мин. сумма: ${formatRub(item.min_order_amount)}`,
-    `Каналы: ${item.channels.join(", ")}`,
+    `Каналы: ${item.channels.map((channel) => PROMO_CHANNEL_LABELS[channel]).join(", ")}`,
   ]
 
   if (item.first_order_only) {
@@ -302,11 +320,11 @@ export function buildPromoRuleSummary(item: {
   }
 
   if (item.include_category_ids.length > 0 || item.exclude_category_ids.length > 0) {
-    parts.push(`Категории include/exclude: ${item.include_category_ids.length}/${item.exclude_category_ids.length}`)
+    parts.push(`Категории включено/исключено: ${item.include_category_ids.length}/${item.exclude_category_ids.length}`)
   }
 
   if (item.include_title_keywords.length > 0 || item.exclude_title_keywords.length > 0) {
-    parts.push(`Keywords include/exclude: ${item.include_title_keywords.length}/${item.exclude_title_keywords.length}`)
+    parts.push(`Ключевые слова включено/исключено: ${item.include_title_keywords.length}/${item.exclude_title_keywords.length}`)
   }
 
   return parts.join(" | ")
