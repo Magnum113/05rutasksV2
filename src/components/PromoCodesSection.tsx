@@ -291,20 +291,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
     return rows
   }, [filters, promos, query])
 
-  const metrics = useMemo(() => {
-    return filteredPromos.reduce(
-      (acc, promo) => {
-        acc.purchases += promo.purchases_count
-        acc.revenue += promo.revenue_total
-        if (promo.status === "active") {
-          acc.active += 1
-        }
-        return acc
-      },
-      { purchases: 0, revenue: 0, active: 0 },
-    )
-  }, [filteredPromos])
-
   const includeCoveragePreview = useMemo(
     () => calcCategoryCoverage(form.include_category_ids, form.include_category_scopes, PROMO_CATEGORY_OPTIONS),
     [form.include_category_ids, form.include_category_scopes],
@@ -619,12 +605,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
             </div>
 
             <Button onClick={startCreatePromo}>Создать промокод</Button>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-            <MetricCard title="Активных промокодов" value={metrics.active} />
-            <MetricCard title="Покупки с промокодом" value={metrics.purchases} />
-            <MetricCard title="Выручка с промокодом" value={formatRub(metrics.revenue)} />
           </div>
 
           <Card>
@@ -1422,24 +1402,6 @@ function TokenInput(props: TokenInputProps) {
         <p className="text-xs text-muted-foreground">Разделители: запятая или перенос строки.</p>
       </div>
     </FieldBlock>
-  )
-}
-
-interface MetricCardProps {
-  title: string
-  value: string | number
-}
-
-function MetricCard(props: MetricCardProps) {
-  const { title, value } = props
-
-  return (
-    <Card>
-      <CardContent className="pt-6">
-        <p className="text-sm text-muted-foreground">{title}</p>
-        <p className="mt-1 text-2xl font-semibold">{value}</p>
-      </CardContent>
-    </Card>
   )
 }
 
