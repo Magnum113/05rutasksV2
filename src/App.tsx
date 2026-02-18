@@ -25,6 +25,7 @@ import {
 } from "@/admin/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { PromoCodesSection } from "@/components/PromoCodesSection"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -42,7 +43,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
-type Screen = "tasks" | "editor"
+type Screen = "tasks" | "editor" | "promo"
 type RewardFilter = "all" | RewardType
 type TypeFilter = "all" | TaskType
 type StatusFilter = "all" | TaskStatus
@@ -239,6 +240,7 @@ function App() {
 
   const [screen, setScreen] = useState<Screen>("tasks")
   const [globalSearch, setGlobalSearch] = useState("")
+  const [promoCreateSignal, setPromoCreateSignal] = useState(0)
 
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
 
@@ -414,6 +416,11 @@ function App() {
     setFormErrors([])
     setFieldErrors({})
     setScreen("editor")
+  }
+
+  function beginCreatePromo() {
+    setScreen("promo")
+    setPromoCreateSignal((prev) => prev + 1)
   }
 
   function beginEditTask(task: Task) {
@@ -755,6 +762,11 @@ function App() {
     return <Badge className={cn("border", STATUS_BADGE_CLASS[status])}>{STATUS_LABELS[status]}</Badge>
   }
 
+  const topActionLabel = screen === "promo" ? "+ Новый промокод" : "+ Новое задание"
+  const globalSearchPlaceholder =
+    screen === "promo" ? "code, name, discount_id, seller_id" : "task_code, заголовок"
+  const onTopActionClick = screen === "promo" ? beginCreatePromo : beginCreateTask
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="flex min-h-screen flex-col lg:flex-row">
@@ -763,7 +775,7 @@ function App() {
             <div className="space-y-2">
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#E30614]">05.RU</p>
               <h1 className="text-2xl font-semibold">Админка маркетинга</h1>
-              <p className="text-sm text-slate-300">Интерфейс для создания и редактирования заданий.</p>
+              <p className="text-sm text-slate-300">Интерфейс для управления заданиями и промокодами.</p>
             </div>
 
             <nav className="space-y-2">
@@ -787,6 +799,13 @@ function App() {
               >
                 Создать задание
               </Button>
+              <Button
+                className="w-full justify-start"
+                variant={screen === "promo" ? "default" : "secondary"}
+                onClick={() => setScreen("promo")}
+              >
+                Промокоды
+              </Button>
             </nav>
           </div>
         </aside>
@@ -800,11 +819,11 @@ function App() {
                   id="global-search"
                   value={globalSearch}
                   onChange={(event) => setGlobalSearch(event.target.value)}
-                  placeholder="task_code, заголовок"
+                  placeholder={globalSearchPlaceholder}
                 />
               </div>
 
-              <Button onClick={beginCreateTask}>+ Новое задание</Button>
+              <Button onClick={onTopActionClick}>{topActionLabel}</Button>
             </div>
           </div>
 
@@ -1056,6 +1075,8 @@ function App() {
                   </Card>
                 </div>
               ) : null}
+
+              {screen === "promo" ? <PromoCodesSection globalSearch={globalSearch} createSignal={promoCreateSignal} /> : null}
 
               {screen === "editor" ? (
                 <div className="space-y-4">
