@@ -27,7 +27,7 @@ import {
   summarizeTitleRules,
   type PromoTitleRulesFilter,
 } from "@/admin/promoRegistry"
-import { downloadCsv, formatDate, parseDate } from "@/admin/utils"
+import { formatDate, parseDate } from "@/admin/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -121,6 +121,32 @@ function createPromoForm(): PromoForm {
   }
 }
 
+function promoToForm(promo: PromoCodeEntity): PromoForm {
+  return {
+    status: promo.status,
+    name: promo.name,
+    code: promo.code,
+    start_date: promo.start_date,
+    end_date: promo.end_date,
+    discount_type: promo.discount_type,
+    discount_value: String(promo.discount_value),
+    max_discount: promo.max_discount === null ? "" : String(promo.max_discount),
+    min_order_amount: promo.min_order_amount === null ? "" : String(promo.min_order_amount),
+    channels: [...promo.channels],
+    counter: promo.counter === null ? "" : String(promo.counter),
+    per_user_limit: promo.per_user_limit === null ? "" : String(promo.per_user_limit),
+    first_order_only: promo.first_order_only,
+    seller_ids: [...promo.seller_ids],
+    include_category_ids: [...promo.include_category_ids],
+    exclude_category_ids: [...promo.exclude_category_ids],
+    include_category_scopes: { ...promo.include_category_scopes },
+    exclude_category_scopes: { ...promo.exclude_category_scopes },
+    include_title_keywords: [...promo.include_title_keywords],
+    exclude_title_keywords: [...promo.exclude_title_keywords],
+    internal_comment: promo.internal_comment,
+  }
+}
+
 function getAncestors(categoryId: string): string[] {
   const ancestors: string[] = []
   let current = CATEGORY_BY_ID.get(categoryId)
@@ -173,6 +199,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
   const [formErrors, setFormErrors] = useState<string[]>([])
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [flash, setFlash] = useState<PromoFlash | null>(null)
+  const [editingPromoId, setEditingPromoId] = useState<string | null>(null)
 
   useEffect(() => {
     if (createSignal === 0) {
@@ -180,6 +207,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
     }
 
     setMode("create")
+    setEditingPromoId(null)
     setForm(createPromoForm())
     setFormErrors([])
     setFieldErrors({})
@@ -319,6 +347,20 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
     setFieldErrors({})
   }
 
+  function startCreatePromo() {
+    setEditingPromoId(null)
+    setMode("create")
+    resetForm()
+  }
+
+  function startEditPromo(promo: PromoCodeEntity) {
+    setEditingPromoId(promo.id)
+    setMode("create")
+    setForm(promoToForm(promo))
+    setFormErrors([])
+    setFieldErrors({})
+  }
+
   function toggleChannel(channel: PromoChannel, checked: boolean) {
     setForm((prev) => {
       const nextChannels = checked
@@ -401,7 +443,9 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
       addError("code", "Поле «Код промокода» обязательно")
     }
 
-    const duplicateCode = promos.find((item) => item.code.toLowerCase() === form.code.trim().toLowerCase())
+    const duplicateCode = promos.find(
+      (item) => item.code.toLowerCase() === form.code.trim().toLowerCase() && item.id !== editingPromoId,
+    )
     if (duplicateCode) {
       addError("code", "Промокод с таким кодом уже существует")
     }
@@ -481,40 +525,62 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
       return
     }
 
-    const payload: PromoCodeEntity = {
-      id: `promo_${Math.random().toString(36).slice(2, 8)}`,
+    const nextIncludeKeywords = normalizeKeywordList(form.include_title_keywords)
+    const nextExcludeKeywords = normalizeKeywordList(form.exclude_title_keywords)
+    const nextPayload = {
       status: form.status,
       name: form.name.trim(),
       code: form.code.trim(),
       start_date: form.start_date,
       end_date: form.end_date,
-      discount_id: `discount_auto_${Date.now().toString().slice(-6)}`,
       discount_type: form.discount_type,
       discount_value: Number(form.discount_value),
       max_discount: form.max_discount === "" ? null : Number(form.max_discount),
       min_order_amount: form.min_order_amount === "" ? null : Number(form.min_order_amount),
-      channels: form.channels,
+      channels: [...form.channels],
       counter: form.counter === "" ? null : Number(form.counter),
-      current_counter: 0,
       per_user_limit: form.per_user_limit === "" ? null : Number(form.per_user_limit),
       first_order_only: form.first_order_only,
-      seller_ids: form.seller_ids,
-      include_category_ids: form.include_category_ids,
-      exclude_category_ids: form.exclude_category_ids,
-      include_category_scopes: form.include_category_scopes,
-      exclude_category_scopes: form.exclude_category_scopes,
-      include_title_keywords: normalizeKeywordList(form.include_title_keywords),
-      exclude_title_keywords: normalizeKeywordList(form.exclude_title_keywords),
+      seller_ids: [...form.seller_ids],
+      include_category_ids: [...form.include_category_ids],
+      exclude_category_ids: [...form.exclude_category_ids],
+      include_category_scopes: { ...form.include_category_scopes },
+      exclude_category_scopes: { ...form.exclude_category_scopes },
+      include_title_keywords: nextIncludeKeywords,
+      exclude_title_keywords: nextExcludeKeywords,
       internal_comment: form.internal_comment.trim(),
-      purchases_count: 0,
-      revenue_total: 0,
-      created_at: new Date().toISOString(),
     }
 
-    setPromos((prev) => [payload, ...prev])
+    if (editingPromoId) {
+      setPromos((prev) =>
+        prev.map((item) =>
+          item.id === editingPromoId
+            ? {
+                ...item,
+                ...nextPayload,
+              }
+            : item,
+        ),
+      )
+      setFlash({ type: "success", text: `Промокод ${nextPayload.code} обновлен` })
+    } else {
+      const payload: PromoCodeEntity = {
+        id: `promo_${Math.random().toString(36).slice(2, 8)}`,
+        discount_id: `discount_auto_${Date.now().toString().slice(-6)}`,
+        current_counter: 0,
+        purchases_count: 0,
+        revenue_total: 0,
+        created_at: new Date().toISOString(),
+        ...nextPayload,
+      }
+
+      setPromos((prev) => [payload, ...prev])
+      setFlash({ type: "success", text: `Промокод ${payload.code} сохранен` })
+    }
+
     setMode("list")
+    setEditingPromoId(null)
     resetForm()
-    setFlash({ type: "success", text: `Промокод ${payload.code} сохранен` })
   }
 
   return (
@@ -548,11 +614,11 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
             <div>
               <h2 className="text-2xl font-semibold">Промокоды</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Раздел `Маркетинг → Промокоды`: список, создание промокода и просмотр карточки.
+                Раздел `Маркетинг → Промокоды`: список, создание и редактирование промокодов.
               </p>
             </div>
 
-            <Button onClick={() => setMode("create")}>Создать промокод</Button>
+            <Button onClick={startCreatePromo}>Создать промокод</Button>
           </div>
 
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
@@ -636,41 +702,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
               <Button variant="outline" onClick={resetFilters}>
                 Сбросить фильтры
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (filteredPromos.length === 0) {
-                    setFlash({ type: "info", text: "Нет данных для экспорта" })
-                    return
-                  }
-
-                  downloadCsv(
-                    "promo_codes_export.csv",
-                    filteredPromos.map((item) => ({
-                      "Код промокода": item.code,
-                      "Название": item.name,
-                      "Статус": PROMO_STATUS_LABELS[item.status],
-                      "Дата начала": item.start_date,
-                      "Дата окончания": item.end_date,
-                      "Тип скидки": PROMO_DISCOUNT_TYPE_LABELS[item.discount_type],
-                      "Значение скидки": item.discount_value,
-                      "Максимальная скидка": item.max_discount === null ? "Без ограничения" : item.max_discount,
-                      "Минимальная сумма заказа": item.min_order_amount === null ? "От любой суммы" : item.min_order_amount,
-                      "Продавцы": formatPromoSellerList(item.seller_ids),
-                      "Только первый заказ": item.first_order_only ? "Да" : "Нет",
-                      "Каналы": item.channels.map((channel) => PROMO_CHANNEL_LABELS[channel]).join("|"),
-                      "Правила по категориям": summarizeCategoryRules(item),
-                      "Правила по ключевым словам": summarizeTitleRules(item),
-                      "Количество покупок": item.purchases_count,
-                      "Суммарная выручка": item.revenue_total,
-                    })),
-                  )
-
-                  setFlash({ type: "success", text: `CSV выгружен: ${filteredPromos.length} записей` })
-                }}
-              >
-                Экспорт CSV
-              </Button>
             </CardFooter>
           </Card>
 
@@ -697,12 +728,13 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                       <TableHead>Ключевые слова</TableHead>
                       <TableHead>Покупки</TableHead>
                       <TableHead>Выручка</TableHead>
+                      <TableHead>Действия</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredPromos.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={17}>
+                        <TableCell colSpan={18}>
                           <p className="py-6 text-center text-sm text-muted-foreground">Промокоды не найдены.</p>
                         </TableCell>
                       </TableRow>
@@ -734,6 +766,11 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                           <TableCell>{summarizeTitleRules(item)}</TableCell>
                           <TableCell>{item.purchases_count}</TableCell>
                           <TableCell>{formatRub(item.revenue_total)}</TableCell>
+                          <TableCell>
+                            <Button size="sm" variant="outline" onClick={() => startEditPromo(item)}>
+                              Изменить
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))
                     )}
@@ -748,7 +785,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
       {mode === "create" ? (
         <div className="space-y-4">
           <div>
-            <h2 className="text-2xl font-semibold">Создать промокод</h2>
+            <h2 className="text-2xl font-semibold">{editingPromoId ? "Редактировать промокод" : "Создать промокод"}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Настройка расширенных условий: каналы, категории включения/исключения, ключевые слова и лимиты.
             </p>
@@ -817,7 +854,9 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
               </div>
 
               <p className="mt-3 text-xs text-muted-foreground">
-                ID скидки создается и привязывается автоматически при сохранении промокода.
+                {editingPromoId
+                  ? "ID скидки сохраняется, обновляются параметры промокода."
+                  : "ID скидки создается и привязывается автоматически при сохранении промокода."}
               </p>
             </CardContent>
           </Card>
@@ -1019,11 +1058,12 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                 <Button variant="outline" onClick={resetForm}>
                   Очистить форму
                 </Button>
-                <Button onClick={savePromo}>Сохранить промокод</Button>
+                <Button onClick={savePromo}>{editingPromoId ? "Сохранить изменения" : "Сохранить промокод"}</Button>
                 <Button
                   variant="outline"
                   onClick={() => {
                     setMode("list")
+                    setEditingPromoId(null)
                     resetForm()
                   }}
                 >
