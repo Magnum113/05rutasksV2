@@ -56,7 +56,6 @@ interface PromoFilters {
   status: "all" | PromoStatus
   activeFrom: string
   activeTo: string
-  discountId: string
   channel: "all" | PromoChannel
   firstOrderOnly: PromoFirstOrderFilter
   hasTitleRules: PromoTitleRulesFilter
@@ -68,7 +67,6 @@ interface PromoForm {
   code: string
   start_date: string
   end_date: string
-  discount_id: string
   discount_type: PromoDiscountType
   discount_value: string
   max_discount: string
@@ -111,14 +109,13 @@ function createPromoForm(): PromoForm {
     code: "",
     start_date: now.toISOString().slice(0, 10),
     end_date: end.toISOString().slice(0, 10),
-    discount_id: "",
     discount_type: "percent",
     discount_value: "",
     max_discount: "",
-    min_order_amount: "0",
+    min_order_amount: "",
     channels: ["web"],
     counter: "",
-    per_user_limit: "1",
+    per_user_limit: "",
     first_order_only: false,
     seller_id: "",
     include_category_ids: [],
@@ -174,7 +171,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
     status: "all",
     activeFrom: "",
     activeTo: "",
-    discountId: "",
     channel: "all",
     firstOrderOnly: "all",
     hasTitleRules: "all",
@@ -222,10 +218,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
       }
 
       if (filters.status !== "all" && item.status !== filters.status) {
-        return false
-      }
-
-      if (filters.discountId && !item.discount_id.toLowerCase().includes(filters.discountId.toLowerCase())) {
         return false
       }
 
@@ -317,9 +309,10 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
       buildPromoRuleSummary({
         discount_type: form.discount_type,
         discount_value: Number(form.discount_value) || 0,
-        max_discount: Number(form.max_discount) || 0,
-        min_order_amount: Number(form.min_order_amount) || 0,
+        max_discount: form.max_discount === "" ? null : Number(form.max_discount),
+        min_order_amount: form.min_order_amount === "" ? null : Number(form.min_order_amount),
         channels: form.channels,
+        per_user_limit: form.per_user_limit === "" ? null : Number(form.per_user_limit),
         first_order_only: form.first_order_only,
         seller_id: form.seller_id.trim() || null,
         include_category_ids: form.include_category_ids,
@@ -338,6 +331,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
       form.include_title_keywords,
       form.max_discount,
       form.min_order_amount,
+      form.per_user_limit,
       form.seller_id,
     ],
   )
@@ -352,7 +346,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
       status: "all",
       activeFrom: "",
       activeTo: "",
-      discountId: "",
       channel: "all",
       firstOrderOnly: "all",
       hasTitleRules: "all",
@@ -452,10 +445,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
       addError("code", "Промокод с таким кодом уже существует")
     }
 
-    if (!form.discount_id.trim()) {
-      addError("discount_id", "Поле «ID скидки» обязательно")
-    }
-
     if (!form.start_date) {
       addError("start_date", "Поле «Дата начала» обязательно")
     }
@@ -475,19 +464,25 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
       addError("discount_value", "Значение скидки должно быть больше 0")
     }
 
-    const maxDiscount = Number(form.max_discount)
-    if (!Number.isFinite(maxDiscount) || maxDiscount <= 0) {
-      addError("max_discount", "Максимальная скидка должна быть больше 0")
+    if (form.max_discount !== "") {
+      const maxDiscount = Number(form.max_discount)
+      if (!Number.isFinite(maxDiscount) || maxDiscount <= 0) {
+        addError("max_discount", "Максимальная скидка должна быть больше 0, если заполнена")
+      }
     }
 
-    const minOrderAmount = Number(form.min_order_amount)
-    if (!Number.isFinite(minOrderAmount) || minOrderAmount < 0) {
-      addError("min_order_amount", "Минимальная сумма заказа должна быть не меньше 0")
+    if (form.min_order_amount !== "") {
+      const minOrderAmount = Number(form.min_order_amount)
+      if (!Number.isFinite(minOrderAmount) || minOrderAmount < 0) {
+        addError("min_order_amount", "Минимальная сумма заказа должна быть не меньше 0, если заполнена")
+      }
     }
 
-    const perUserLimit = Number(form.per_user_limit)
-    if (!Number.isInteger(perUserLimit) || perUserLimit < 1) {
-      addError("per_user_limit", "Лимит на пользователя должен быть не меньше 1")
+    if (form.per_user_limit !== "") {
+      const perUserLimit = Number(form.per_user_limit)
+      if (!Number.isInteger(perUserLimit) || perUserLimit < 1) {
+        addError("per_user_limit", "Лимит на пользователя должен быть не меньше 1, если заполнен")
+      }
     }
 
     if (form.counter !== "") {
@@ -532,15 +527,15 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
       code: form.code.trim(),
       start_date: form.start_date,
       end_date: form.end_date,
-      discount_id: form.discount_id.trim(),
+      discount_id: `discount_auto_${Date.now().toString().slice(-6)}`,
       discount_type: form.discount_type,
       discount_value: Number(form.discount_value),
-      max_discount: Number(form.max_discount),
-      min_order_amount: Number(form.min_order_amount),
+      max_discount: form.max_discount === "" ? null : Number(form.max_discount),
+      min_order_amount: form.min_order_amount === "" ? null : Number(form.min_order_amount),
       channels: form.channels,
       counter: form.counter === "" ? null : Number(form.counter),
       current_counter: 0,
-      per_user_limit: Number(form.per_user_limit),
+      per_user_limit: form.per_user_limit === "" ? null : Number(form.per_user_limit),
       first_order_only: form.first_order_only,
       seller_id: form.seller_id.trim() || null,
       include_category_ids: form.include_category_ids,
@@ -642,14 +637,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                   />
                 </FieldBlock>
 
-                <FieldBlock label="ID скидки">
-                  <Input
-                    value={filters.discountId}
-                    onChange={(event) => setFilters((prev) => ({ ...prev, discountId: event.target.value }))}
-                    placeholder="Например: discount_1007"
-                  />
-                </FieldBlock>
-
                 <PromoSelectField
                   label="Канал"
                   value={filters.channel}
@@ -704,11 +691,11 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                       "Статус": PROMO_STATUS_LABELS[item.status],
                       "Дата начала": item.start_date,
                       "Дата окончания": item.end_date,
-                      "ID скидки": item.discount_id,
                       "Тип скидки": PROMO_DISCOUNT_TYPE_LABELS[item.discount_type],
                       "Значение скидки": item.discount_value,
-                      "Максимальная скидка": item.max_discount,
-                      "Минимальная сумма заказа": item.min_order_amount,
+                      "Максимальная скидка": item.max_discount === null ? "Без ограничения" : item.max_discount,
+                      "Минимальная сумма заказа": item.min_order_amount === null ? "От любой суммы" : item.min_order_amount,
+                      "Продавец": item.seller_id ?? "Любой",
                       "Только первый заказ": item.first_order_only ? "Да" : "Нет",
                       "Каналы": item.channels.map((channel) => PROMO_CHANNEL_LABELS[channel]).join("|"),
                       "Правила по категориям": summarizeCategoryRules(item),
@@ -738,11 +725,11 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                       <TableHead>Лимит/использовано</TableHead>
                       <TableHead>Дата начала</TableHead>
                       <TableHead>Дата окончания</TableHead>
-                      <TableHead>ID скидки</TableHead>
                       <TableHead>Тип скидки</TableHead>
                       <TableHead>Значение скидки</TableHead>
                       <TableHead>Макс. скидка</TableHead>
                       <TableHead>Мин. сумма заказа</TableHead>
+                      <TableHead>Продавец</TableHead>
                       <TableHead>Первый заказ</TableHead>
                       <TableHead>Каналы</TableHead>
                       <TableHead>Категории</TableHead>
@@ -774,13 +761,13 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                           </TableCell>
                           <TableCell>{formatDate(item.start_date)}</TableCell>
                           <TableCell>{formatDate(item.end_date)}</TableCell>
-                          <TableCell>{item.discount_id}</TableCell>
                           <TableCell>{PROMO_DISCOUNT_TYPE_LABELS[item.discount_type]}</TableCell>
                           <TableCell>
                             {item.discount_type === "percent" ? `${item.discount_value}%` : formatRub(item.discount_value)}
                           </TableCell>
-                          <TableCell>{formatRub(item.max_discount)}</TableCell>
-                          <TableCell>{formatRub(item.min_order_amount)}</TableCell>
+                          <TableCell>{item.max_discount === null ? "Без ограничения" : formatRub(item.max_discount)}</TableCell>
+                          <TableCell>{item.min_order_amount === null ? "От любой суммы" : formatRub(item.min_order_amount)}</TableCell>
+                          <TableCell>{item.seller_id ?? "Любой"}</TableCell>
                           <TableCell>{item.first_order_only ? "Да" : "Нет"}</TableCell>
                           <TableCell>{item.channels.map((channel) => PROMO_CHANNEL_LABELS[channel]).join(", ")}</TableCell>
                           <TableCell>{summarizeCategoryRules(item)}</TableCell>
@@ -872,14 +859,11 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                   />
                 </FieldBlock>
 
-                <FieldBlock label="ID скидки *" error={fieldErrors.discount_id}>
-                  <Input
-                    value={form.discount_id}
-                    onChange={(event) => setFormField("discount_id", event.target.value)}
-                    placeholder="Например: discount_1007"
-                  />
-                </FieldBlock>
               </div>
+
+              <p className="mt-3 text-xs text-muted-foreground">
+                ID скидки создается и привязывается автоматически при сохранении промокода.
+              </p>
             </CardContent>
           </Card>
 
@@ -905,21 +889,23 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                   />
                 </FieldBlock>
 
-                <FieldBlock label="Максимальная скидка *" error={fieldErrors.max_discount}>
+                <FieldBlock label="Максимальная скидка (опционально)" error={fieldErrors.max_discount}>
                   <Input
                     type="number"
                     min="1"
                     value={form.max_discount}
                     onChange={(event) => setFormField("max_discount", event.target.value)}
+                    placeholder="Если пусто — без верхнего лимита"
                   />
                 </FieldBlock>
 
-                <FieldBlock label="Минимальная сумма заказа *" error={fieldErrors.min_order_amount}>
+                <FieldBlock label="Минимальная сумма заказа (опционально)" error={fieldErrors.min_order_amount}>
                   <Input
                     type="number"
                     min="0"
                     value={form.min_order_amount}
                     onChange={(event) => setFormField("min_order_amount", event.target.value)}
+                    placeholder="Если пусто — от любой суммы"
                   />
                 </FieldBlock>
 
@@ -933,12 +919,13 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                   />
                 </FieldBlock>
 
-                <FieldBlock label="Лимит применений на пользователя *" error={fieldErrors.per_user_limit}>
+                <FieldBlock label="Лимит применений на пользователя (опционально)" error={fieldErrors.per_user_limit}>
                   <Input
                     type="number"
                     min="1"
                     value={form.per_user_limit}
                     onChange={(event) => setFormField("per_user_limit", event.target.value)}
+                    placeholder="Если пусто — без ограничения"
                   />
                 </FieldBlock>
 
@@ -1055,6 +1042,15 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                   Приоритет у исключения.
                 </p>
               ) : null}
+
+              <Card className="border-blue-200 bg-blue-50">
+                <CardContent className="pt-6">
+                  <p className="text-sm text-blue-800">
+                    Предпросмотр по ключевым словам: включено {form.include_title_keywords.length}, исключено{" "}
+                    {form.exclude_title_keywords.length}
+                  </p>
+                </CardContent>
+              </Card>
             </CardContent>
           </Card>
 
@@ -1115,20 +1111,29 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                 <InfoRow label="Код промокода" value={viewPromo.code} />
                 <InfoRow label="Название" value={viewPromo.name} />
                 <InfoRow label="Статус" value={PROMO_STATUS_LABELS[viewPromo.status]} />
-                <InfoRow label="ID скидки" value={viewPromo.discount_id} />
                 <InfoRow label="Дата начала" value={formatDate(viewPromo.start_date)} />
                 <InfoRow label="Дата окончания" value={formatDate(viewPromo.end_date)} />
                 <InfoRow
                   label="Скидка"
                   value={
                     viewPromo.discount_type === "percent"
-                      ? `${viewPromo.discount_value}% (макс ${formatRub(viewPromo.max_discount)})`
-                      : `${formatRub(viewPromo.discount_value)} (макс ${formatRub(viewPromo.max_discount)})`
+                      ? viewPromo.max_discount === null
+                        ? `${viewPromo.discount_value}% (без верхнего лимита)`
+                        : `${viewPromo.discount_value}% (макс ${formatRub(viewPromo.max_discount)})`
+                      : viewPromo.max_discount === null
+                        ? `${formatRub(viewPromo.discount_value)} (без верхнего лимита)`
+                        : `${formatRub(viewPromo.discount_value)} (макс ${formatRub(viewPromo.max_discount)})`
                   }
                 />
-                <InfoRow label="Минимальная сумма заказа" value={formatRub(viewPromo.min_order_amount)} />
+                <InfoRow
+                  label="Минимальная сумма заказа"
+                  value={viewPromo.min_order_amount === null ? "От любой суммы" : formatRub(viewPromo.min_order_amount)}
+                />
                 <InfoRow label="Лимит/использовано" value={`${viewPromo.counter ?? "∞"}/${viewPromo.current_counter}`} />
-                <InfoRow label="Лимит на пользователя" value={String(viewPromo.per_user_limit)} />
+                <InfoRow
+                  label="Лимит на пользователя"
+                  value={viewPromo.per_user_limit === null ? "Без ограничения" : String(viewPromo.per_user_limit)}
+                />
                 <InfoRow label="Только первый заказ" value={viewPromo.first_order_only ? "Да" : "Нет"} />
                 <InfoRow label="Каналы" value={viewPromo.channels.map((channel) => PROMO_CHANNEL_LABELS[channel]).join(", ")} />
                 <InfoRow label="ID продавца" value={viewPromo.seller_id ?? "—"} />

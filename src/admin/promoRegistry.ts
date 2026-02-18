@@ -1,6 +1,6 @@
 export type PromoStatus = "draft" | "active" | "inactive" | "expired"
 export type PromoDiscountType = "percent" | "fixed"
-export type PromoChannel = "web" | "mobile_app" | "mobile_web"
+export type PromoChannel = "web" | "app"
 export type PromoFirstOrderFilter = "all" | "yes" | "no"
 export type PromoTitleRulesFilter = "all" | "yes" | "no"
 export type CategoryScope = "with_children" | "self"
@@ -23,12 +23,12 @@ export interface PromoCodeEntity {
   discount_id: string
   discount_type: PromoDiscountType
   discount_value: number
-  max_discount: number
-  min_order_amount: number
+  max_discount: number | null
+  min_order_amount: number | null
   channels: PromoChannel[]
   counter: number | null
   current_counter: number
-  per_user_limit: number
+  per_user_limit: number | null
   first_order_only: boolean
   seller_id: string | null
   include_category_ids: string[]
@@ -57,8 +57,7 @@ export const PROMO_DISCOUNT_TYPE_LABELS: Record<PromoDiscountType, string> = {
 
 export const PROMO_CHANNEL_LABELS: Record<PromoChannel, string> = {
   web: "Веб",
-  mobile_app: "Мобильное приложение",
-  mobile_web: "Мобильный веб",
+  app: "Приложение",
 }
 
 export const PROMO_STATUS_OPTIONS: Array<{ value: PromoStatus; label: string }> = [
@@ -75,8 +74,7 @@ export const PROMO_DISCOUNT_TYPE_OPTIONS: Array<{ value: PromoDiscountType; labe
 
 export const PROMO_CHANNEL_OPTIONS: Array<{ value: PromoChannel; label: string }> = [
   { value: "web", label: PROMO_CHANNEL_LABELS.web },
-  { value: "mobile_app", label: PROMO_CHANNEL_LABELS.mobile_app },
-  { value: "mobile_web", label: PROMO_CHANNEL_LABELS.mobile_web },
+  { value: "app", label: PROMO_CHANNEL_LABELS.app },
 ]
 
 export const CATEGORY_SCOPE_OPTIONS: Array<{ value: CategoryScope; label: string }> = [
@@ -134,7 +132,7 @@ export const MOCK_PROMO_CODES: PromoCodeEntity[] = [
     discount_value: 10,
     max_discount: 3000,
     min_order_amount: 5000,
-    channels: ["web", "mobile_app"],
+    channels: ["web", "app"],
     counter: 1000,
     current_counter: 412,
     per_user_limit: 1,
@@ -161,12 +159,12 @@ export const MOCK_PROMO_CODES: PromoCodeEntity[] = [
     discount_id: "discount_1022",
     discount_type: "fixed",
     discount_value: 700,
-    max_discount: 700,
-    min_order_amount: 3000,
-    channels: ["mobile_app"],
+    max_discount: null,
+    min_order_amount: null,
+    channels: ["app"],
     counter: null,
     current_counter: 95,
-    per_user_limit: 1,
+    per_user_limit: null,
     first_order_only: true,
     seller_id: null,
     include_category_ids: [],
@@ -192,7 +190,7 @@ export const MOCK_PROMO_CODES: PromoCodeEntity[] = [
     discount_value: 12,
     max_discount: 2500,
     min_order_amount: 6000,
-    channels: ["web", "mobile_web"],
+    channels: ["web"],
     counter: 400,
     current_counter: 0,
     per_user_limit: 2,
@@ -290,9 +288,10 @@ export function calcCategoryCoverage(
 export function buildPromoRuleSummary(item: {
   discount_type: PromoDiscountType
   discount_value: number
-  max_discount: number
-  min_order_amount: number
+  max_discount: number | null
+  min_order_amount: number | null
   channels: PromoChannel[]
+  per_user_limit?: number | null
   first_order_only: boolean
   seller_id: string | null
   include_category_ids: string[]
@@ -302,14 +301,22 @@ export function buildPromoRuleSummary(item: {
 }): string {
   const discountText =
     item.discount_type === "percent"
-      ? `${item.discount_value}% (макс ${formatRub(item.max_discount)})`
-      : `${formatRub(item.discount_value)} (макс ${formatRub(item.max_discount)})`
+      ? item.max_discount === null
+        ? `${item.discount_value}% (без верхнего лимита)`
+        : `${item.discount_value}% (макс ${formatRub(item.max_discount)})`
+      : item.max_discount === null
+        ? `${formatRub(item.discount_value)} (без верхнего лимита)`
+        : `${formatRub(item.discount_value)} (макс ${formatRub(item.max_discount)})`
 
   const parts = [
     `Скидка: ${discountText}`,
-    `Мин. сумма: ${formatRub(item.min_order_amount)}`,
+    `Мин. сумма: ${item.min_order_amount === null ? "от любой суммы" : formatRub(item.min_order_amount)}`,
     `Каналы: ${item.channels.map((channel) => PROMO_CHANNEL_LABELS[channel]).join(", ")}`,
   ]
+
+  if (item.per_user_limit === null) {
+    parts.push("Лимит на пользователя: без ограничений")
+  }
 
   if (item.first_order_only) {
     parts.push("Только первый заказ")
