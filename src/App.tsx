@@ -43,7 +43,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
-type Screen = "tasks" | "editor" | "promo"
+type Screen = "tasks" | "editor" | "discounts" | "promo"
 type RewardFilter = "all" | RewardType
 type TypeFilter = "all" | TaskType
 type StatusFilter = "all" | TaskStatus
@@ -241,6 +241,7 @@ function App() {
   const [screen, setScreen] = useState<Screen>("tasks")
   const [globalSearch, setGlobalSearch] = useState("")
   const [promoCreateSignal, setPromoCreateSignal] = useState(0)
+  const [discountCreateSignal, setDiscountCreateSignal] = useState(0)
 
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
 
@@ -421,6 +422,11 @@ function App() {
   function beginCreatePromo() {
     setScreen("promo")
     setPromoCreateSignal((prev) => prev + 1)
+  }
+
+  function beginCreateDiscount() {
+    setScreen("discounts")
+    setDiscountCreateSignal((prev) => prev + 1)
   }
 
   function beginEditTask(task: Task) {
@@ -762,10 +768,16 @@ function App() {
     return <Badge className={cn("border", STATUS_BADGE_CLASS[status])}>{STATUS_LABELS[status]}</Badge>
   }
 
-  const topActionLabel = screen === "promo" ? "+ Новый промокод" : "+ Новое задание"
+  const topActionLabel =
+    screen === "promo" ? "+ Новый промокод" : screen === "discounts" ? "+ Новая скидка" : "+ Новое задание"
   const globalSearchPlaceholder =
-    screen === "promo" ? "код, название, продавцы" : "task_code, заголовок"
-  const onTopActionClick = screen === "promo" ? beginCreatePromo : beginCreateTask
+    screen === "promo"
+      ? "код промокода, связанная скидка"
+      : screen === "discounts"
+        ? "название скидки, продавец, ограничения"
+        : "task_code, заголовок"
+  const onTopActionClick =
+    screen === "promo" ? beginCreatePromo : screen === "discounts" ? beginCreateDiscount : beginCreateTask
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -775,7 +787,7 @@ function App() {
             <div className="space-y-2">
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#E30614]">05.RU</p>
               <h1 className="text-2xl font-semibold">Админка маркетинга</h1>
-              <p className="text-sm text-slate-300">Интерфейс для управления заданиями и промокодами.</p>
+              <p className="text-sm text-slate-300">Интерфейс для управления заданиями, скидками и промокодами.</p>
             </div>
 
             <nav className="space-y-2">
@@ -798,6 +810,13 @@ function App() {
                 }}
               >
                 Создать задание
+              </Button>
+              <Button
+                className="w-full justify-start"
+                variant={screen === "discounts" ? "default" : "secondary"}
+                onClick={() => setScreen("discounts")}
+              >
+                Скидки
               </Button>
               <Button
                 className="w-full justify-start"
@@ -1076,7 +1095,15 @@ function App() {
                 </div>
               ) : null}
 
-              {screen === "promo" ? <PromoCodesSection globalSearch={globalSearch} createSignal={promoCreateSignal} /> : null}
+              {screen === "promo" || screen === "discounts" ? (
+                <PromoCodesSection
+                  mode={screen === "promo" ? "promo" : "discounts"}
+                  globalSearch={globalSearch}
+                  promoCreateSignal={promoCreateSignal}
+                  discountCreateSignal={discountCreateSignal}
+                  onNavigate={(next) => setScreen(next)}
+                />
+              ) : null}
 
               {screen === "editor" ? (
                 <div className="space-y-4">
