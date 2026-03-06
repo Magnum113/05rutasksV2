@@ -9,6 +9,7 @@ import {
   DISCOUNT_STATUS_LABELS,
   DISCOUNT_STATUS_OPTIONS,
   formatProductList,
+  formatPromotionList,
   formatPromoSellerList,
   formatRub,
   MOCK_DISCOUNTS,
@@ -25,6 +26,7 @@ import {
   PROMO_DISCOUNT_TYPE_OPTIONS,
   type PromoFirstOrderFilter,
   PROMO_PRODUCT_OPTIONS,
+  PROMO_PROMOTION_OPTIONS,
   type PromoStatus,
   PROMO_STATUS_LABELS,
   PROMO_STATUS_OPTIONS,
@@ -87,6 +89,7 @@ interface DiscountForm {
   min_order_amount: string
   channels: PromoChannel[]
   seller_ids: string[]
+  promotion_ids: string[]
   include_category_ids: string[]
   exclude_category_ids: string[]
   include_category_scopes: Record<string, CategoryScope>
@@ -143,6 +146,7 @@ function createDiscountForm(): DiscountForm {
     min_order_amount: "",
     channels: ["web"],
     seller_ids: [],
+    promotion_ids: [],
     include_category_ids: [],
     exclude_category_ids: [],
     include_category_scopes: {},
@@ -183,6 +187,7 @@ function discountToForm(discount: DiscountEntity): DiscountForm {
     min_order_amount: discount.min_order_amount === null ? "" : String(discount.min_order_amount),
     channels: [...discount.channels],
     seller_ids: [...discount.seller_ids],
+    promotion_ids: [...discount.promotion_ids],
     include_category_ids: [...discount.include_category_ids],
     exclude_category_ids: [...discount.exclude_category_ids],
     include_category_scopes: { ...discount.include_category_scopes },
@@ -347,7 +352,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
     const rows = discounts.filter((item) => {
       if (query) {
         const haystack =
-          `${item.id} ${item.name} ${item.seller_ids.join(" ")} ${formatPromoSellerList(item.seller_ids)} ${item.include_category_ids.join(" ")} ${item.exclude_category_ids.join(" ")}`.toLowerCase()
+          `${item.id} ${item.name} ${item.seller_ids.join(" ")} ${item.promotion_ids.join(" ")} ${formatPromoSellerList(item.seller_ids)} ${formatPromotionList(item.promotion_ids)} ${item.include_category_ids.join(" ")} ${item.exclude_category_ids.join(" ")}`.toLowerCase()
 
         if (!haystack.includes(query)) {
           return false
@@ -662,6 +667,15 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
       addError("channels", "Для скидки нужен минимум один канал (web или app)")
     }
 
+    const knownPromotionIds = new Set(PROMO_PROMOTION_OPTIONS.map((option) => option.id))
+    const unknownPromotions = discountForm.promotion_ids.filter((promotionId) => !knownPromotionIds.has(promotionId))
+    if (unknownPromotions.length > 0) {
+      addError(
+        "promotion_ids",
+        `Выбраны несуществующие акции: ${unknownPromotions.join(", ")}. Такая скидка невалидна.`,
+      )
+    }
+
     const includeKeywords = normalizeKeywordList(discountForm.include_title_keywords)
     const excludeKeywords = normalizeKeywordList(discountForm.exclude_title_keywords)
 
@@ -697,6 +711,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
       min_order_amount: discountForm.min_order_amount === "" ? null : Number(discountForm.min_order_amount),
       channels: [...discountForm.channels],
       seller_ids: [...discountForm.seller_ids],
+      promotion_ids: [...discountForm.promotion_ids],
       include_category_ids: [...discountForm.include_category_ids],
       exclude_category_ids: [...discountForm.exclude_category_ids],
       include_category_scopes: { ...discountForm.include_category_scopes },
@@ -1032,6 +1047,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                                 <TableCell>
                                   <p className="text-sm">Каналы: {item.channels.map((channel) => PROMO_CHANNEL_LABELS[channel]).join(", ")}</p>
                                   <p className="text-sm">Продавцы: {formatPromoSellerList(item.seller_ids)}</p>
+                                  <p className="text-sm">Акции: {formatPromotionList(item.promotion_ids)}</p>
                                   <p className="text-sm text-muted-foreground">{summarizeAssortmentRules(item)}</p>
                                 </TableCell>
                                 <TableCell>{linkedPromos}</TableCell>
@@ -1221,6 +1237,19 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                     />
                   </div>
 
+                  <FieldBlock label="Выбор акций (опционально)" error={discountFieldErrors.promotion_ids}>
+                    <MultiSelectDropdown
+                      value={discountForm.promotion_ids}
+                      options={PROMO_PROMOTION_OPTIONS.map((option) => ({ value: option.id, label: `${option.name} (${option.id})` }))}
+                      placeholder="Акции не выбраны"
+                      onChange={(next) => setDiscountField("promotion_ids", next)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Если выбрана акция, скидка применяется только к товарам этой акции. При одновременных фильтрах
+                      (категории/товары/слова) применяется пересечение условий.
+                    </p>
+                  </FieldBlock>
+
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <FieldBlock label="Включить товары (опционально)">
                       <MultiSelectDropdown
@@ -1284,6 +1313,15 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                       Конфликт между включающими и исключающими словами: {keywordConflicts.join(", ")}. Приоритет у исключения.
                     </p>
                   ) : null}
+
+                  <Card className="border-blue-200 bg-blue-50">
+                    <CardContent className="pt-6">
+                      <p className="text-sm text-blue-800">Выбранные акции: {formatPromotionList(discountForm.promotion_ids)}</p>
+                      <p className="mt-1 text-sm text-blue-800">
+                        Логика: акция + другие фильтры работают как пересечение условий.
+                      </p>
+                    </CardContent>
+                  </Card>
 
                   <Card className="border-blue-200 bg-blue-50">
                     <CardContent className="pt-6">
@@ -1620,6 +1658,14 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                         <p className="mt-1 text-sm text-blue-800">
                           Статус скидки: {DISCOUNT_STATUS_LABELS[selectedPromoDiscount.status]}, период: {formatDate(selectedPromoDiscount.start_date)} - {formatDate(selectedPromoDiscount.end_date)}
                         </p>
+                        {selectedPromoDiscount.promotion_ids.length > 0 ? (
+                          <p className="mt-1 text-sm text-blue-800">
+                            Условие по акциям: товар должен входить в выбранные акции ({formatPromotionList(selectedPromoDiscount.promotion_ids)}).
+                          </p>
+                        ) : null}
+                        <p className="mt-1 text-sm text-blue-800">
+                          При одновременных ограничениях скидки (акции + категории/товары/слова) в checkout применяется пересечение условий.
+                        </p>
                         {selectedPromoDiscount.status !== "active" ? (
                           <p className="mt-1 text-sm text-amber-700">
                             Если скидка неактивна или вне периода, промокод не применяется в checkout.
@@ -1786,8 +1832,13 @@ interface MultiSelectDropdownProps {
 function MultiSelectDropdown(props: MultiSelectDropdownProps) {
   const { value, options, placeholder, onChange } = props
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
 
   const selectedLabels = options.filter((option) => value.includes(option.value)).map((option) => option.label)
+  const normalizedQuery = query.trim().toLowerCase()
+  const visibleOptions = normalizedQuery
+    ? options.filter((option) => option.label.toLowerCase().includes(normalizedQuery))
+    : options
 
   function toggleOption(optionValue: string, checked: boolean) {
     const next = checked ? Array.from(new Set([...value, optionValue])) : value.filter((item) => item !== optionValue)
@@ -1796,7 +1847,20 @@ function MultiSelectDropdown(props: MultiSelectDropdownProps) {
 
   return (
     <div className="relative">
-      <Button type="button" variant="outline" className="w-full justify-between" onClick={() => setOpen((prev) => !prev)}>
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full justify-between"
+        onClick={() =>
+          setOpen((prev) => {
+            const next = !prev
+            if (!next) {
+              setQuery("")
+            }
+            return next
+          })
+        }
+      >
         <span className="truncate text-left">{selectedLabels.length > 0 ? selectedLabels.join(", ") : placeholder}</span>
         <span className="ml-2 text-xs text-muted-foreground">{open ? "▴" : "▾"}</span>
       </Button>
@@ -1812,19 +1876,39 @@ function MultiSelectDropdown(props: MultiSelectDropdownProps) {
             </Button>
           </div>
 
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Поиск..."
+            className="mb-2 h-8"
+          />
+
           <div className="max-h-56 space-y-2 overflow-y-auto rounded-md border p-2">
-            {options.map((option) => (
-              <label key={option.value} className="inline-flex w-full items-center gap-2 text-sm">
-                <Checkbox
-                  checked={value.includes(option.value)}
-                  onCheckedChange={(checked) => toggleOption(option.value, checked === true)}
-                />
-                <span>{option.label}</span>
-              </label>
-            ))}
+            {visibleOptions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Ничего не найдено</p>
+            ) : (
+              visibleOptions.map((option) => (
+                <label key={option.value} className="inline-flex w-full items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={value.includes(option.value)}
+                    onCheckedChange={(checked) => toggleOption(option.value, checked === true)}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))
+            )}
           </div>
 
-          <Button type="button" size="sm" variant="outline" className="mt-2 w-full" onClick={() => setOpen(false)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="mt-2 w-full"
+            onClick={() => {
+              setOpen(false)
+              setQuery("")
+            }}
+          >
             Готово
           </Button>
         </div>

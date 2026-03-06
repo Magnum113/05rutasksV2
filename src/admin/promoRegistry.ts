@@ -19,6 +19,11 @@ export interface PromoProductOption {
   name: string
 }
 
+export interface PromoPromotionOption {
+  id: string
+  name: string
+}
+
 export interface PromoSellerOption {
   id: string
   name: string
@@ -36,6 +41,7 @@ export interface DiscountEntity {
   min_order_amount: number | null
   channels: PromoChannel[]
   seller_ids: string[]
+  promotion_ids: string[]
   include_category_ids: string[]
   exclude_category_ids: string[]
   include_category_scopes: Record<string, CategoryScope>
@@ -166,6 +172,13 @@ export const PROMO_PRODUCT_OPTIONS: PromoProductOption[] = [
   { id: "prod-iphone-15", name: "Смартфон Apple iPhone 15" },
 ]
 
+export const PROMO_PROMOTION_OPTIONS: PromoPromotionOption[] = [
+  { id: "promo-campaign-spring", name: "Весенние скидки 2026" },
+  { id: "promo-campaign-mobile", name: "Мобильный сезон" },
+  { id: "promo-campaign-home", name: "Дом и ремонт: спецпредложение" },
+  { id: "promo-campaign-electro", name: "Электроника недели" },
+]
+
 export const MOCK_DISCOUNTS: DiscountEntity[] = [
   {
     id: "discount_1007",
@@ -179,6 +192,7 @@ export const MOCK_DISCOUNTS: DiscountEntity[] = [
     min_order_amount: 5000,
     channels: ["web", "app"],
     seller_ids: ["seller-smart-inc", "seller-city-electro"],
+    promotion_ids: ["promo-campaign-electro", "promo-campaign-spring"],
     include_category_ids: ["cat-electronics-smartphones"],
     exclude_category_ids: ["cat-electronics-tv"],
     include_category_scopes: { "cat-electronics-smartphones": "with_children" },
@@ -201,6 +215,7 @@ export const MOCK_DISCOUNTS: DiscountEntity[] = [
     min_order_amount: null,
     channels: ["app"],
     seller_ids: [],
+    promotion_ids: ["promo-campaign-mobile"],
     include_category_ids: [],
     exclude_category_ids: ["cat-kids"],
     include_category_scopes: {},
@@ -223,6 +238,7 @@ export const MOCK_DISCOUNTS: DiscountEntity[] = [
     min_order_amount: 6000,
     channels: ["web"],
     seller_ids: ["seller-smart-inc", "seller-home-tech"],
+    promotion_ids: [],
     include_category_ids: ["cat-home-kitchen"],
     exclude_category_ids: [],
     include_category_scopes: { "cat-home-kitchen": "self" },
@@ -245,6 +261,7 @@ export const MOCK_DISCOUNTS: DiscountEntity[] = [
     min_order_amount: 3500,
     channels: ["web", "app"],
     seller_ids: [],
+    promotion_ids: ["promo-campaign-home"],
     include_category_ids: ["cat-home"],
     exclude_category_ids: [],
     include_category_scopes: { "cat-home": "with_children" },
@@ -377,6 +394,16 @@ export function formatProductList(productIds: string[]): string {
     .join(", ")
 }
 
+export function formatPromotionList(promotionIds: string[]): string {
+  if (promotionIds.length === 0) {
+    return "—"
+  }
+
+  return promotionIds
+    .map((promotionId) => PROMO_PROMOTION_OPTIONS.find((option) => option.id === promotionId)?.name ?? `${promotionId} (не найдена)`)
+    .join(", ")
+}
+
 export function summarizeCategoryRules(item: {
   include_category_ids: string[]
   exclude_category_ids: string[]
@@ -406,6 +433,7 @@ export function summarizeTitleRules(item: {
 }
 
 export function summarizeAssortmentRules(item: {
+  promotion_ids: string[]
   include_category_ids: string[]
   exclude_category_ids: string[]
   include_product_ids: string[]
@@ -414,6 +442,10 @@ export function summarizeAssortmentRules(item: {
   exclude_title_keywords: string[]
 }): string {
   const parts: string[] = []
+
+  if (item.promotion_ids.length > 0) {
+    parts.push(`Акции ${item.promotion_ids.length}`)
+  }
 
   if (item.include_category_ids.length > 0 || item.exclude_category_ids.length > 0) {
     parts.push(`Категории ${item.include_category_ids.length}/${item.exclude_category_ids.length}`)
