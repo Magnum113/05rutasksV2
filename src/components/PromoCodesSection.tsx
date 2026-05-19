@@ -42,14 +42,32 @@ import {
 import { formatDate, parseDate } from "@/admin/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldSet,
+  FieldLegend,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import { cn } from "@/lib/utils"
 
 interface PromoCodesSectionProps {
   mode: "promo" | "discounts"
@@ -117,16 +135,16 @@ interface SectionFlash {
   text: string
 }
 
-const PROMO_STATUS_CLASS: Record<PromoStatus, string> = {
-  draft: "border-slate-300 bg-slate-100 text-slate-700",
-  active: "border-emerald-200 bg-emerald-100 text-emerald-700",
-  inactive: "border-amber-200 bg-amber-100 text-amber-700",
+const PROMO_STATUS_VARIANT: Record<PromoStatus, "default" | "secondary" | "outline" | "destructive"> = {
+  draft: "outline",
+  active: "default",
+  inactive: "secondary",
 }
 
-const DISCOUNT_STATUS_CLASS: Record<DiscountStatus, string> = {
-  draft: "border-slate-300 bg-slate-100 text-slate-700",
-  active: "border-emerald-200 bg-emerald-100 text-emerald-700",
-  inactive: "border-amber-200 bg-amber-100 text-amber-700",
+const DISCOUNT_STATUS_VARIANT: Record<DiscountStatus, "default" | "secondary" | "outline" | "destructive"> = {
+  draft: "outline",
+  active: "default",
+  inactive: "secondary",
 }
 
 const CATEGORY_BY_ID = new Map(PROMO_CATEGORY_OPTIONS.map((item) => [item.id, item]))
@@ -890,32 +908,16 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       {flash ? (
-        <Card
-          className={cn(
-            flash.type === "success" && "border-emerald-200 bg-emerald-50",
-            flash.type === "error" && "border-rose-200 bg-rose-50",
-            flash.type === "info" && "border-sky-200 bg-sky-50",
-          )}
-        >
-          <CardContent className="pt-6">
-            <p
-              className={cn(
-                "text-sm font-medium",
-                flash.type === "success" && "text-emerald-700",
-                flash.type === "error" && "text-rose-700",
-                flash.type === "info" && "text-sky-700",
-              )}
-            >
-              {flash.text}
-            </p>
-          </CardContent>
-        </Card>
+        <Alert variant={flash.type === "error" ? "destructive" : "default"}>
+          <AlertTitle>{flash.type === "error" ? "Ошибка" : "Готово"}</AlertTitle>
+          <AlertDescription>{flash.text}</AlertDescription>
+        </Alert>
       ) : null}
 
       {mode === "discounts" ? (
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4">
           {discountViewMode === "list" ? (
             <>
               <div className="flex flex-wrap items-end justify-between gap-3">
@@ -998,7 +1000,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
 
               <Card>
                 <CardContent className="pt-6">
-                  <div className="rounded-md border bg-white">
+                  <div className="rounded-md border bg-card">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1027,7 +1029,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                               <TableRow key={item.id}>
                                 <TableCell className="font-semibold">{item.name}</TableCell>
                                 <TableCell>
-                                  <Badge className={cn("border", DISCOUNT_STATUS_CLASS[item.status])}>
+                                  <Badge variant={DISCOUNT_STATUS_VARIANT[item.status]}>
                                     {DISCOUNT_STATUS_LABELS[item.status]}
                                   </Badge>
                                 </TableCell>
@@ -1076,18 +1078,16 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
               </div>
 
               {discountFormErrors.length > 0 ? (
-                <Card className="border-rose-200 bg-rose-50">
-                  <CardHeader>
-                    <CardTitle className="text-rose-700">Проверьте поля формы скидки</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="list-disc space-y-1 pl-5 text-sm text-rose-700">
+                <Alert variant="destructive">
+                  <AlertTitle>Проверьте поля формы скидки</AlertTitle>
+                  <AlertDescription>
+                    <ul className="ml-4 flex list-disc flex-col gap-1">
                       {discountFormErrors.map((error) => (
                         <li key={error}>{error}</li>
                       ))}
                     </ul>
-                  </CardContent>
-                </Card>
+                  </AlertDescription>
+                </Alert>
               ) : null}
 
               <Card>
@@ -1173,9 +1173,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                     </FieldBlock>
                   </div>
 
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    Если задан `max_discount`, итоговая скидка ограничивается этим значением.
-                  </p>
+                  <FieldDescription>Если задан `max_discount`, итоговая скидка ограничивается этим значением.</FieldDescription>
                 </CardContent>
               </Card>
 
@@ -1183,22 +1181,23 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                 <CardHeader>
                   <CardTitle>Каналы и продавцы</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="space-y-2">
-                    <Label>Каналы применения * (минимум 1)</Label>
-                    <div className="flex flex-wrap gap-4 rounded-md border bg-slate-50 p-3">
+                <CardContent className="flex flex-col gap-3">
+                  <FieldSet>
+                    <FieldLegend>Каналы применения * (минимум 1)</FieldLegend>
+                    <FieldGroup className="flex-row flex-wrap gap-4 rounded-md border bg-muted p-3">
                       {PROMO_CHANNEL_OPTIONS.map((option) => (
-                        <label key={option.value} className="inline-flex items-center gap-2 text-sm font-medium">
+                        <Field key={option.value} orientation="horizontal" className="w-auto">
                           <Checkbox
+                            id={`discount-channel-${option.value}`}
                             checked={discountForm.channels.includes(option.value)}
                             onCheckedChange={(checked) => toggleDiscountChannel(option.value, checked === true)}
                           />
-                          {option.label}
-                        </label>
+                          <FieldLabel htmlFor={`discount-channel-${option.value}`}>{option.label}</FieldLabel>
+                        </Field>
                       ))}
-                    </div>
-                    {discountFieldErrors.channels ? <p className="text-xs text-rose-600">{discountFieldErrors.channels}</p> : null}
-                  </div>
+                    </FieldGroup>
+                    <FieldError>{discountFieldErrors.channels}</FieldError>
+                  </FieldSet>
 
                   <FieldBlock label="Продавцы (опционально)">
                     <MultiSelectDropdown
@@ -1207,9 +1206,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                       placeholder="Любые продавцы"
                       onChange={(next) => setDiscountField("seller_ids", next)}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Можно выбрать одного или нескольких продавцов из выпадающего списка.
-                    </p>
+                    <FieldDescription>Можно выбрать одного или нескольких продавцов из выпадающего списка.</FieldDescription>
                   </FieldBlock>
                 </CardContent>
               </Card>
@@ -1218,7 +1215,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                 <CardHeader>
                   <CardTitle>Ассортимент</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="flex flex-col gap-4">
                   <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                     <CategoryRuleSelector
                       title="Включить категории"
@@ -1244,10 +1241,10 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                       placeholder="Акции не выбраны"
                       onChange={(next) => setDiscountField("promotion_ids", next)}
                     />
-                    <p className="text-xs text-muted-foreground">
+                    <FieldDescription>
                       Если выбрана акция, скидка применяется только к товарам этой акции. При одновременных фильтрах
                       (категории/товары/слова) применяется пересечение условий.
-                    </p>
+                    </FieldDescription>
                   </FieldBlock>
 
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1289,46 +1286,51 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                   </div>
 
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    <Card className="border-blue-200 bg-blue-50">
-                      <CardContent className="pt-6">
-                        <p className="text-sm text-blue-800">Охват включенных категорий: {includeCoveragePreview}</p>
-                      </CardContent>
-                    </Card>
+                    <Alert>
+                      <AlertTitle>Охват включенных категорий</AlertTitle>
+                      <AlertDescription>{includeCoveragePreview}</AlertDescription>
+                    </Alert>
 
-                    <Card className="border-blue-200 bg-blue-50">
-                      <CardContent className="pt-6">
-                        <p className="text-sm text-blue-800">Охват исключенных категорий: {excludeCoveragePreview}</p>
-                      </CardContent>
-                    </Card>
+                    <Alert>
+                      <AlertTitle>Охват исключенных категорий</AlertTitle>
+                      <AlertDescription>{excludeCoveragePreview}</AlertDescription>
+                    </Alert>
                   </div>
 
                   {categoryConflicts.length > 0 ? (
-                    <p className="text-sm text-amber-700">
-                      Есть пересечения между включенными и исключенными категориями: {categoryConflicts.join(", ")}. Приоритет у исключения.
-                    </p>
+                    <Alert>
+                      <AlertTitle>Пересечение категорий</AlertTitle>
+                      <AlertDescription>
+                        Есть пересечения между включенными и исключенными категориями: {categoryConflicts.join(", ")}.
+                        Приоритет у исключения.
+                      </AlertDescription>
+                    </Alert>
                   ) : null}
 
                   {keywordConflicts.length > 0 ? (
-                    <p className="text-sm text-amber-700">
-                      Конфликт между включающими и исключающими словами: {keywordConflicts.join(", ")}. Приоритет у исключения.
-                    </p>
+                    <Alert>
+                      <AlertTitle>Конфликт ключевых слов</AlertTitle>
+                      <AlertDescription>
+                        Конфликт между включающими и исключающими словами: {keywordConflicts.join(", ")}. Приоритет у исключения.
+                      </AlertDescription>
+                    </Alert>
                   ) : null}
 
-                  <Card className="border-blue-200 bg-blue-50">
-                    <CardContent className="pt-6">
-                      <p className="text-sm text-blue-800">Выбранные акции: {formatPromotionList(discountForm.promotion_ids)}</p>
-                      <p className="mt-1 text-sm text-blue-800">
-                        Логика: акция + другие фильтры работают как пересечение условий.
-                      </p>
-                    </CardContent>
-                  </Card>
+                  <Alert>
+                    <AlertTitle>Выбранные акции</AlertTitle>
+                    <AlertDescription>
+                      <p>{formatPromotionList(discountForm.promotion_ids)}</p>
+                      <p>Логика: акция + другие фильтры работают как пересечение условий.</p>
+                    </AlertDescription>
+                  </Alert>
 
-                  <Card className="border-blue-200 bg-blue-50">
-                    <CardContent className="pt-6">
-                      <p className="text-sm text-blue-800">Включенные товары: {formatProductList(discountForm.include_product_ids)}</p>
-                      <p className="mt-1 text-sm text-blue-800">Исключенные товары: {formatProductList(discountForm.exclude_product_ids)}</p>
-                    </CardContent>
-                  </Card>
+                  <Alert>
+                    <AlertTitle>Выбранные товары</AlertTitle>
+                    <AlertDescription>
+                      <p>Включенные товары: {formatProductList(discountForm.include_product_ids)}</p>
+                      <p>Исключенные товары: {formatProductList(discountForm.exclude_product_ids)}</p>
+                    </AlertDescription>
+                  </Alert>
                 </CardContent>
               </Card>
 
@@ -1336,9 +1338,9 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                 <CardHeader>
                   <CardTitle>Связанные промокоды</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="flex flex-col gap-3">
                   {editingDiscountId ? (
-                    <div className="rounded-md border bg-white">
+                    <div className="rounded-md border bg-card">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -1359,7 +1361,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                               <TableRow key={promo.id}>
                                 <TableCell className="font-semibold">{promo.code}</TableCell>
                                 <TableCell>
-                                  <Badge className={cn("border", PROMO_STATUS_CLASS[promo.status])}>
+                                  <Badge variant={PROMO_STATUS_VARIANT[promo.status]}>
                                     {PROMO_STATUS_LABELS[promo.status]}
                                   </Badge>
                                 </TableCell>
@@ -1414,7 +1416,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
       ) : null}
 
       {mode === "promo" ? (
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4">
           {promoViewMode === "list" ? (
             <>
               <div className="flex flex-wrap items-end justify-between gap-3">
@@ -1508,7 +1510,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
 
               <Card>
                 <CardContent className="pt-6">
-                  <div className="rounded-md border bg-white">
+                  <div className="rounded-md border bg-card">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1540,7 +1542,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                               <TableRow key={item.id}>
                                 <TableCell className="font-semibold">{item.code}</TableCell>
                                 <TableCell>
-                                  <Badge className={cn("border", PROMO_STATUS_CLASS[item.status])}>
+                                  <Badge variant={PROMO_STATUS_VARIANT[item.status]}>
                                     {PROMO_STATUS_LABELS[item.status]}
                                   </Badge>
                                 </TableCell>
@@ -1555,9 +1557,9 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                                 <TableCell>{item.per_user_limit ?? "∞"}</TableCell>
                                 <TableCell>
                                   {linkedDiscount ? (
-                                    <div className="space-y-1">
+                                    <div className="flex flex-col gap-1">
                                       <p className="text-sm font-medium">{linkedDiscount.name}</p>
-                                      <Badge className={cn("border", DISCOUNT_STATUS_CLASS[linkedDiscount.status])}>
+                                      <Badge variant={DISCOUNT_STATUS_VARIANT[linkedDiscount.status]}>
                                         {DISCOUNT_STATUS_LABELS[linkedDiscount.status]}
                                       </Badge>
                                     </div>
@@ -1592,18 +1594,16 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
               </div>
 
               {promoFormErrors.length > 0 ? (
-                <Card className="border-rose-200 bg-rose-50">
-                  <CardHeader>
-                    <CardTitle className="text-rose-700">Проверьте поля формы промокода</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="list-disc space-y-1 pl-5 text-sm text-rose-700">
+                <Alert variant="destructive">
+                  <AlertTitle>Проверьте поля формы промокода</AlertTitle>
+                  <AlertDescription>
+                    <ul className="ml-4 flex list-disc flex-col gap-1">
                       {promoFormErrors.map((error) => (
                         <li key={error}>{error}</li>
                       ))}
                     </ul>
-                  </CardContent>
-                </Card>
+                  </AlertDescription>
+                </Alert>
               ) : null}
 
               <Card>
@@ -1634,45 +1634,48 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                 <CardHeader>
                   <CardTitle>Связь со скидкой</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="flex flex-col gap-3">
                   <FieldBlock label="Связанная скидка" error={promoFieldErrors.discount_id}>
                     <Select value={promoForm.discount_id || "none"} onValueChange={(value) => setPromoField("discount_id", value === "none" ? "" : value)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Выберите скидку" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">Не выбрана</SelectItem>
-                        {discounts.map((discount) => (
-                          <SelectItem key={discount.id} value={discount.id}>
-                            {discount.name} ({DISCOUNT_STATUS_LABELS[discount.status]})
-                          </SelectItem>
-                        ))}
+                        <SelectGroup>
+                          <SelectItem value="none">Не выбрана</SelectItem>
+                          {discounts.map((discount) => (
+                            <SelectItem key={discount.id} value={discount.id}>
+                              {discount.name} ({DISCOUNT_STATUS_LABELS[discount.status]})
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
                       </SelectContent>
                     </Select>
                   </FieldBlock>
 
                   {selectedPromoDiscount ? (
-                    <Card className="border-blue-200 bg-blue-50">
-                      <CardContent className="pt-6">
-                        <p className="text-sm text-blue-800">Выбрана скидка: {selectedPromoDiscount.name}</p>
-                        <p className="mt-1 text-sm text-blue-800">
-                          Статус скидки: {DISCOUNT_STATUS_LABELS[selectedPromoDiscount.status]}, период: {formatDate(selectedPromoDiscount.start_date)} - {formatDate(selectedPromoDiscount.end_date)}
+                    <Alert>
+                      <AlertTitle>Выбрана скидка: {selectedPromoDiscount.name}</AlertTitle>
+                      <AlertDescription>
+                        <p>
+                          Статус скидки: {DISCOUNT_STATUS_LABELS[selectedPromoDiscount.status]}, период:{" "}
+                          {formatDate(selectedPromoDiscount.start_date)} - {formatDate(selectedPromoDiscount.end_date)}
                         </p>
                         {selectedPromoDiscount.promotion_ids.length > 0 ? (
-                          <p className="mt-1 text-sm text-blue-800">
-                            Условие по акциям: товар должен входить в выбранные акции ({formatPromotionList(selectedPromoDiscount.promotion_ids)}).
+                          <p>
+                            Условие по акциям: товар должен входить в выбранные акции (
+                            {formatPromotionList(selectedPromoDiscount.promotion_ids)}).
                           </p>
                         ) : null}
-                        <p className="mt-1 text-sm text-blue-800">
-                          При одновременных ограничениях скидки (акции + категории/товары/слова) в checkout применяется пересечение условий.
+                        <p>
+                          При одновременных ограничениях скидки (акции + категории/товары/слова) в checkout применяется
+                          пересечение условий.
                         </p>
                         {selectedPromoDiscount.status !== "active" ? (
-                          <p className="mt-1 text-sm text-amber-700">
-                            Если скидка неактивна или вне периода, промокод не применяется в checkout.
-                          </p>
+                          <p>Если скидка неактивна или вне периода, промокод не применяется в checkout.</p>
                         ) : null}
-                      </CardContent>
-                    </Card>
+                      </AlertDescription>
+                    </Alert>
                   ) : null}
 
                   <Button variant="outline" onClick={startCreateDiscount}>
@@ -1710,7 +1713,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                 <CardHeader>
                   <CardTitle>Лимиты и ограничения использования</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="flex flex-col gap-3">
                   <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
                     <PromoSelectField
                       label="Режим использования *"
@@ -1741,26 +1744,24 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                       />
                     </FieldBlock>
 
-                    <div className="space-y-2">
-                      <Label>Ограничение first_order_only</Label>
-                      <label className="inline-flex items-center gap-2 text-sm font-medium">
+                    <Field>
+                      <FieldLabel>Ограничение first_order_only</FieldLabel>
+                      <Field orientation="horizontal" className="w-auto">
                         <Checkbox
+                          id="promo-first-order-only"
                           checked={promoForm.first_order_only}
                           onCheckedChange={(checked) => setPromoField("first_order_only", checked === true)}
                         />
-                        Только для первого заказа
-                      </label>
-                    </div>
+                        <FieldLabel htmlFor="promo-first-order-only">Только для первого заказа</FieldLabel>
+                      </Field>
+                    </Field>
                   </div>
 
                   {promoForm.usage_mode === "one_time" ? (
-                    <Card className="border-blue-200 bg-blue-50">
-                      <CardContent className="pt-6">
-                        <p className="text-sm text-blue-800">
-                          Режим `one_time`: промокод может быть использован только 1 раз в системе.
-                        </p>
-                      </CardContent>
-                    </Card>
+                    <Alert>
+                      <AlertTitle>Режим one_time</AlertTitle>
+                      <AlertDescription>Промокод может быть использован только 1 раз в системе.</AlertDescription>
+                    </Alert>
                   ) : null}
                 </CardContent>
               </Card>
@@ -1804,21 +1805,23 @@ function PromoSelectField(props: PromoSelectFieldProps) {
   const { label, value, options, onChange } = props
 
   return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
+    <Field>
+      <FieldLabel>{label}</FieldLabel>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger>
           <SelectValue placeholder="Выберите вариант" />
         </SelectTrigger>
         <SelectContent>
-          {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
+          <SelectGroup>
+            {options.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
         </SelectContent>
       </Select>
-    </div>
+    </Field>
   )
 }
 
@@ -1832,13 +1835,8 @@ interface MultiSelectDropdownProps {
 function MultiSelectDropdown(props: MultiSelectDropdownProps) {
   const { value, options, placeholder, onChange } = props
   const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState("")
 
   const selectedLabels = options.filter((option) => value.includes(option.value)).map((option) => option.label)
-  const normalizedQuery = query.trim().toLowerCase()
-  const visibleOptions = normalizedQuery
-    ? options.filter((option) => option.label.toLowerCase().includes(normalizedQuery))
-    : options
 
   function toggleOption(optionValue: string, checked: boolean) {
     const next = checked ? Array.from(new Set([...value, optionValue])) : value.filter((item) => item !== optionValue)
@@ -1846,28 +1844,19 @@ function MultiSelectDropdown(props: MultiSelectDropdownProps) {
   }
 
   return (
-    <div className="relative">
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full justify-between"
-        onClick={() =>
-          setOpen((prev) => {
-            const next = !prev
-            if (!next) {
-              setQuery("")
-            }
-            return next
-          })
-        }
-      >
-        <span className="truncate text-left">{selectedLabels.length > 0 ? selectedLabels.join(", ") : placeholder}</span>
-        <span className="ml-2 text-xs text-muted-foreground">{open ? "▴" : "▾"}</span>
-      </Button>
-
-      {open ? (
-        <div className="absolute z-20 mt-2 w-full rounded-md border bg-white p-2 shadow-lg">
-          <div className="mb-2 flex flex-wrap gap-2">
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
+          <span className="truncate text-left">{selectedLabels.length > 0 ? selectedLabels.join(", ") : placeholder}</span>
+          <Badge variant="secondary" className="ml-2 rounded-full">
+            {value.length}
+          </Badge>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[--radix-popover-trigger-width] p-0">
+        <Command>
+          <CommandInput placeholder="Поиск..." />
+          <div className="flex flex-wrap gap-2 border-b p-2">
             <Button type="button" size="sm" variant="ghost" onClick={() => onChange(options.map((option) => option.value))}>
               Выбрать все
             </Button>
@@ -1876,44 +1865,39 @@ function MultiSelectDropdown(props: MultiSelectDropdownProps) {
             </Button>
           </div>
 
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Поиск..."
-            className="mb-2 h-8"
-          />
-
-          <div className="max-h-56 space-y-2 overflow-y-auto rounded-md border p-2">
-            {visibleOptions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Ничего не найдено</p>
-            ) : (
-              visibleOptions.map((option) => (
-                <label key={option.value} className="inline-flex w-full items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={value.includes(option.value)}
-                    onCheckedChange={(checked) => toggleOption(option.value, checked === true)}
-                  />
-                  <span>{option.label}</span>
-                </label>
-              ))
-            )}
-          </div>
+          <CommandList>
+            <CommandEmpty>Ничего не найдено</CommandEmpty>
+            <ScrollArea className="h-40">
+              <CommandGroup>
+                {options.map((option) => {
+                  const checked = value.includes(option.value)
+                  return (
+                    <CommandItem
+                      key={option.value}
+                      value={option.label}
+                      onSelect={() => toggleOption(option.value, !checked)}
+                    >
+                      <Checkbox checked={checked} aria-hidden="true" />
+                      <span>{option.label}</span>
+                    </CommandItem>
+                  )
+                })}
+              </CommandGroup>
+            </ScrollArea>
+          </CommandList>
 
           <Button
             type="button"
             size="sm"
             variant="outline"
-            className="mt-2 w-full"
-            onClick={() => {
-              setOpen(false)
-              setQuery("")
-            }}
+            className="m-2 w-[calc(100%-1rem)]"
+            onClick={() => setOpen(false)}
           >
             Готово
           </Button>
-        </div>
-      ) : null}
-    </div>
+        </Command>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -2005,9 +1989,10 @@ function CategoryRuleSelector(props: CategoryRuleSelectorProps) {
     const visibleChildren = children.filter((child) => visibleInTree.get(child.id))
     const hasChildren = visibleChildren.length > 0
     const expanded = normalizedQuery ? true : expandedIds.has(item.id)
+    const checkboxId = `${title}-${item.id}`.replace(/[^a-zA-Z0-9_-]/g, "-")
 
     return (
-      <div key={item.id} className="space-y-2 rounded-md border p-2">
+      <div key={item.id} className="flex flex-col gap-2 rounded-md border p-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2" style={{ paddingLeft: `${depth * 16}px` }}>
             {hasChildren ? (
@@ -2015,7 +2000,7 @@ function CategoryRuleSelector(props: CategoryRuleSelectorProps) {
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0 text-slate-700"
+                className="h-6 w-6 p-0"
                 onClick={() => toggleExpanded(item.id)}
                 aria-label={expanded ? "Свернуть подкатегории" : "Развернуть подкатегории"}
               >
@@ -2025,12 +2010,12 @@ function CategoryRuleSelector(props: CategoryRuleSelectorProps) {
               <span className="inline-block h-6 w-6" />
             )}
 
-            <label className="inline-flex items-center gap-2 text-sm font-medium">
-              <Checkbox checked={checked} onCheckedChange={(value) => onToggle(item.id, value === true)} />
-              <span>
+            <Field orientation="horizontal" className="w-auto">
+              <Checkbox id={checkboxId} checked={checked} onCheckedChange={(value) => onToggle(item.id, value === true)} />
+              <FieldLabel htmlFor={checkboxId}>
                 {item.name} <span className="text-xs text-muted-foreground">({item.id})</span>
-              </span>
-            </label>
+              </FieldLabel>
+            </Field>
           </div>
 
           {checked ? (
@@ -2042,38 +2027,42 @@ function CategoryRuleSelector(props: CategoryRuleSelectorProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {CATEGORY_SCOPE_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  {CATEGORY_SCOPE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           ) : null}
         </div>
 
-        {hasChildren && expanded ? <div className="space-y-2">{visibleChildren.map((child) => renderNode(child, depth + 1))}</div> : null}
+        {hasChildren && expanded ? <div className="flex flex-col gap-2">{visibleChildren.map((child) => renderNode(child, depth + 1))}</div> : null}
       </div>
     )
   }
 
   return (
-    <Card className="border-dashed bg-slate-50">
+    <Card className="border-dashed bg-muted">
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="flex flex-col gap-3">
         <FieldBlock label="Поиск по ID или названию">
           <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="cat-electronics или Смартфоны" />
         </FieldBlock>
 
-        <div className="max-h-72 space-y-2 overflow-y-auto rounded-md border bg-white p-2">
-          {visibleRoots.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Категории по запросу не найдены</p>
-          ) : (
-            visibleRoots.map((root) => renderNode(root, 0))
-          )}
-        </div>
+        <ScrollArea className="h-72 rounded-md border bg-background p-2">
+          <div className="flex flex-col gap-2">
+            {visibleRoots.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Категории по запросу не найдены</p>
+            ) : (
+              visibleRoots.map((root) => renderNode(root, 0))
+            )}
+          </div>
+        </ScrollArea>
 
         <div className="flex flex-wrap gap-2">
           {selectedIds.length === 0 ? (
@@ -2130,8 +2119,8 @@ function TokenInput(props: TokenInputProps) {
 
   return (
     <FieldBlock label={label} error={error}>
-      <div className="space-y-2">
-        <div className="flex flex-wrap gap-2 rounded-md border bg-slate-50 p-2">
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap gap-2 rounded-md border bg-muted p-2">
           {values.length === 0 ? (
             <span className="text-sm text-muted-foreground">Список пуст</span>
           ) : (
@@ -2165,7 +2154,7 @@ function TokenInput(props: TokenInputProps) {
             Добавить
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">Разделители: запятая или перенос строки.</p>
+        <FieldDescription>Разделители: запятая или перенос строки.</FieldDescription>
       </div>
     </FieldBlock>
   )
@@ -2181,10 +2170,10 @@ function FieldBlock(props: FieldBlockProps) {
   const { label, children, error } = props
 
   return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
+    <Field data-invalid={Boolean(error)}>
+      <FieldLabel>{label}</FieldLabel>
       {children}
-      {error ? <p className="text-xs text-rose-600">{error}</p> : null}
-    </div>
+      <FieldError>{error}</FieldError>
+    </Field>
   )
 }

@@ -26,19 +26,28 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { PromoCodesSection } from "@/components/PromoCodesSection"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
@@ -225,12 +234,12 @@ function buildConditions(form: EditorForm): TaskCondition {
   return {}
 }
 
-const STATUS_BADGE_CLASS: Record<TaskStatus, string> = {
-  upcoming: "bg-sky-100 text-sky-700 border-sky-200",
-  active: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  completed: "bg-amber-100 text-amber-700 border-amber-200",
-  reward_claimed: "bg-cyan-100 text-cyan-700 border-cyan-200",
-  expired: "bg-slate-200 text-slate-700 border-slate-300",
+const STATUS_BADGE_VARIANT: Record<TaskStatus, "default" | "secondary" | "outline" | "destructive"> = {
+  upcoming: "outline",
+  active: "default",
+  completed: "secondary",
+  reward_claimed: "secondary",
+  expired: "outline",
 }
 
 function App() {
@@ -765,7 +774,7 @@ function App() {
   }
 
   function renderStatusBadge(status: TaskStatus) {
-    return <Badge className={cn("border", STATUS_BADGE_CLASS[status])}>{STATUS_LABELS[status]}</Badge>
+    return <Badge variant={STATUS_BADGE_VARIANT[status]}>{STATUS_LABELS[status]}</Badge>
   }
 
   const topActionLabel =
@@ -780,17 +789,17 @@ function App() {
     screen === "promo" ? beginCreatePromo : screen === "discounts" ? beginCreateDiscount : beginCreateTask
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen bg-background text-foreground">
       <div className="flex min-h-screen flex-col lg:flex-row">
-        <aside className="w-full border-b bg-slate-950 p-6 text-slate-50 lg:w-72 lg:border-b-0 lg:border-r">
-          <div className="space-y-6">
-            <div className="space-y-2">
+        <aside className="w-full border-b bg-card p-6 text-card-foreground lg:w-72 lg:border-b-0 lg:border-r">
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-2">
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#E30614]">05.RU</p>
               <h1 className="text-2xl font-semibold">Админка маркетинга</h1>
-              <p className="text-sm text-slate-300">Интерфейс для управления заданиями, скидками и промокодами.</p>
+              <p className="text-sm text-muted-foreground">Интерфейс для управления заданиями, скидками и промокодами.</p>
             </div>
 
-            <nav className="space-y-2">
+            <nav className="flex flex-col gap-2">
               <Button
                 className="w-full justify-start"
                 variant={screen === "tasks" ? "default" : "secondary"}
@@ -830,49 +839,33 @@ function App() {
         </aside>
 
         <main className="min-w-0 flex-1">
-          <div className="sticky top-0 z-10 border-b bg-white/95 p-4 backdrop-blur">
+          <div className="sticky top-0 z-10 border-b bg-background/95 p-4 backdrop-blur">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-              <div className="w-full space-y-2 xl:max-w-3xl">
-                <Label htmlFor="global-search">Глобальный поиск</Label>
+              <Field className="w-full xl:max-w-3xl">
+                <FieldLabel htmlFor="global-search">Глобальный поиск</FieldLabel>
                 <Input
                   id="global-search"
                   value={globalSearch}
                   onChange={(event) => setGlobalSearch(event.target.value)}
                   placeholder={globalSearchPlaceholder}
                 />
-              </div>
+              </Field>
 
               <Button onClick={onTopActionClick}>{topActionLabel}</Button>
             </div>
           </div>
 
           <div className="p-4 lg:p-6">
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
               {flash ? (
-                <Card
-                  className={cn(
-                    flash.type === "success" && "border-emerald-200 bg-emerald-50",
-                    flash.type === "error" && "border-rose-200 bg-rose-50",
-                    flash.type === "info" && "border-sky-200 bg-sky-50",
-                  )}
-                >
-                  <CardContent className="pt-6">
-                    <p
-                      className={cn(
-                        "text-sm font-medium",
-                        flash.type === "success" && "text-emerald-700",
-                        flash.type === "error" && "text-rose-700",
-                        flash.type === "info" && "text-sky-700",
-                      )}
-                    >
-                      {flash.text}
-                    </p>
-                  </CardContent>
-                </Card>
+                <Alert variant={flash.type === "error" ? "destructive" : "default"}>
+                  <AlertTitle>{flash.type === "error" ? "Ошибка" : "Готово"}</AlertTitle>
+                  <AlertDescription>{flash.text}</AlertDescription>
+                </Alert>
               ) : null}
 
               {screen === "tasks" ? (
-                <div className="space-y-4">
+                <div className="flex flex-col gap-4">
                   <div>
                     <h2 className="text-2xl font-semibold">Задания</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -960,15 +953,15 @@ function App() {
                   </Card>
 
                   <Card>
-                    <CardContent className="space-y-4 pt-6">
+                    <CardContent className="flex flex-col gap-4 pt-6">
                       <div className="flex flex-wrap items-center gap-3">
-                        <label className="inline-flex items-center gap-2 text-sm font-medium">
+                        <Field orientation="horizontal" className="w-auto">
                           <Checkbox
                             checked={allVisibleSelected}
                             onCheckedChange={(checked) => toggleSelectAllVisible(checked === true)}
                           />
-                          Выбрать все в текущем списке
-                        </label>
+                          <FieldLabel>Выбрать все в текущем списке</FieldLabel>
+                        </Field>
 
                         <Badge variant="secondary" className="rounded-full px-3 py-1">
                           {selectedTaskCount} выбрано
@@ -989,7 +982,7 @@ function App() {
                         <Button variant="outline" onClick={() => onBulkPriorityApply(bulkPriority)}>
                           Изменить приоритет
                         </Button>
-                        <Button variant="outline" className="border-rose-300 text-rose-700 hover:bg-rose-50" onClick={onBulkArchive}>
+                        <Button variant="destructive" onClick={onBulkArchive}>
                           Архивировать выбранные
                         </Button>
                         <Button variant="outline" onClick={exportTasksCsv}>
@@ -997,7 +990,7 @@ function App() {
                         </Button>
                       </div>
 
-                      <div className="rounded-md border bg-white">
+                      <div className="rounded-md border bg-card">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -1052,14 +1045,7 @@ function App() {
                                     <TableCell>{task.priority}</TableCell>
                                     <TableCell>
                                       <div className="flex flex-wrap gap-1">
-                                        <Badge
-                                          className={cn(
-                                            "border",
-                                            task.publication_state === "published"
-                                              ? "border-blue-200 bg-blue-100 text-blue-700"
-                                              : "border-amber-200 bg-amber-100 text-amber-700",
-                                          )}
-                                        >
+                                        <Badge variant={task.publication_state === "published" ? "default" : "secondary"}>
                                           {task.publication_state}
                                         </Badge>
                                         {renderStatusBadge(status)}
@@ -1073,12 +1059,7 @@ function App() {
                                         <Button size="sm" variant="outline" onClick={() => onTaskDuplicate(task)}>
                                           Дублировать
                                         </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="border-rose-300 text-rose-700 hover:bg-rose-50"
-                                          onClick={() => onTaskArchive(task)}
-                                        >
+                                        <Button size="sm" variant="destructive" onClick={() => onTaskArchive(task)}>
                                           Архивировать
                                         </Button>
                                       </div>
@@ -1106,32 +1087,30 @@ function App() {
               ) : null}
 
               {screen === "editor" ? (
-                <div className="space-y-4">
+                <div className="flex flex-col gap-4">
                   <div>
                     <h2 className="text-2xl font-semibold">{editingTaskId ? "Редактировать задание" : "Создать задание"}</h2>
                     <p className="mt-1 text-sm text-muted-foreground">Заполните параметры задания и настройте награды.</p>
                   </div>
 
                   {formErrors.length > 0 ? (
-                    <Card className="border-rose-200 bg-rose-50">
-                      <CardHeader>
-                        <CardTitle className="text-rose-700">Проверьте поля формы</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <ul className="list-disc space-y-1 pl-5 text-sm text-rose-700">
+                    <Alert variant="destructive">
+                      <AlertTitle>Проверьте поля формы</AlertTitle>
+                      <AlertDescription>
+                        <ul className="ml-4 flex list-disc flex-col gap-1">
                           {formErrors.map((error) => (
                             <li key={error}>{error}</li>
                           ))}
                         </ul>
-                      </CardContent>
-                    </Card>
+                      </AlertDescription>
+                    </Alert>
                   ) : null}
 
                   <Card>
                     <CardHeader>
                       <CardTitle>Основное</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3">
+                    <CardContent className="flex flex-col gap-3">
                       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                         <FieldBlock
                           label="task_code *"
@@ -1207,7 +1186,7 @@ function App() {
                         </FieldBlock>
                       </div>
 
-                      <div className="min-h-[120px] rounded-md border bg-slate-50 p-3">
+                      <div className="min-h-[120px] rounded-md border bg-muted p-3">
                         {editorForm.image_upload_preview || editorForm.image_url ? (
                           <img
                             src={editorForm.image_upload_preview || editorForm.image_url}
@@ -1225,7 +1204,7 @@ function App() {
                     <CardHeader>
                       <CardTitle>Периоды</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3">
+                    <CardContent className="flex flex-col gap-3">
                       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                         <FieldBlock label="active_from *" error={fieldErrors.active_from}>
                           <Input
@@ -1244,14 +1223,13 @@ function App() {
                         </FieldBlock>
                       </div>
 
-                      <Card className="border-blue-200 bg-blue-50">
-                        <CardContent className="pt-6">
-                          <p className="text-sm text-blue-800">
-                            Окно claim после завершения задания фиксированное: <span className="font-bold">{CLAIM_WINDOW_DAYS} дней</span>{" "}
-                            (не настраивается).
-                          </p>
-                        </CardContent>
-                      </Card>
+                      <Alert>
+                        <AlertTitle>Фиксированное окно claim</AlertTitle>
+                        <AlertDescription>
+                          Окно claim после завершения задания: <span className="font-bold">{CLAIM_WINDOW_DAYS} дней</span>{" "}
+                          (не настраивается).
+                        </AlertDescription>
+                      </Alert>
                     </CardContent>
                   </Card>
 
@@ -1259,7 +1237,7 @@ function App() {
                     <CardHeader>
                       <CardTitle>Тип задания и условия</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3">
+                    <CardContent className="flex flex-col gap-3">
                       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                         <SelectField
                           label="Тип задания *"
@@ -1280,7 +1258,7 @@ function App() {
                         />
                       </div>
 
-                      <div className="space-y-3">
+                      <div className="flex flex-col gap-3">
                         {editorForm.task_type === "add_to_cart" || editorForm.task_type === "add_to_favorites" ? (
                           <FieldBlock label="Количество товаров *" error={fieldErrors.condition_items_count}>
                             <Input
@@ -1365,9 +1343,7 @@ function App() {
                           </FieldBlock>
                         ) : null}
 
-                        {conditionErrors.length > 1 ? (
-                          <p className="text-sm text-rose-600">Проверьте поля условий выполнения задания.</p>
-                        ) : null}
+                        <FieldError>{conditionErrors.length > 1 ? "Проверьте поля условий выполнения задания." : undefined}</FieldError>
                       </div>
 
                       <FieldBlock label="target_value *" error={fieldErrors.target_value}>
@@ -1379,7 +1355,7 @@ function App() {
                       </FieldBlock>
 
                       {PURCHASE_TYPES.includes(editorForm.task_type) ? (
-                        <Card className="border-dashed bg-slate-50">
+                        <Card className="border-dashed bg-muted">
                           <CardHeader>
                             <CardTitle className="text-base">Фиксированный период покупок (только для purchase)</CardTitle>
                           </CardHeader>
@@ -1411,29 +1387,31 @@ function App() {
                     <CardHeader>
                       <CardTitle>Награды</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="flex flex-wrap gap-4">
-                        <label className="inline-flex items-center gap-2 text-sm font-medium">
+                    <CardContent className="flex flex-col gap-3">
+                      <FieldGroup className="flex-row flex-wrap gap-4">
+                        <Field orientation="horizontal" className="w-auto">
                           <Checkbox
+                            id="reward-bonus"
                             checked={editorForm.reward_bonus}
                             onCheckedChange={(checked) => setEditorField("reward_bonus", checked === true)}
                           />
-                          bonus
-                        </label>
+                          <FieldLabel htmlFor="reward-bonus">bonus</FieldLabel>
+                        </Field>
 
-                        <label className="inline-flex items-center gap-2 text-sm font-medium">
+                        <Field orientation="horizontal" className="w-auto">
                           <Checkbox
+                            id="reward-promocode"
                             checked={editorForm.reward_promocode}
                             onCheckedChange={(checked) => setEditorField("reward_promocode", checked === true)}
                           />
-                          promocode
-                        </label>
-                      </div>
+                          <FieldLabel htmlFor="reward-promocode">promocode</FieldLabel>
+                        </Field>
+                      </FieldGroup>
 
-                      {fieldErrors.rewards ? <p className="text-sm text-rose-600">{fieldErrors.rewards}</p> : null}
+                      <FieldError>{fieldErrors.rewards}</FieldError>
 
                       {editorForm.reward_bonus ? (
-                        <Card className="border-dashed bg-slate-50">
+                        <Card className="border-dashed bg-muted">
                           <CardHeader>
                             <CardTitle className="text-base">Параметры bonus</CardTitle>
                           </CardHeader>
@@ -1451,11 +1429,11 @@ function App() {
                       ) : null}
 
                       {editorForm.reward_promocode ? (
-                        <Card className="border-dashed bg-slate-50">
+                        <Card className="border-dashed bg-muted">
                           <CardHeader>
                             <CardTitle className="text-base">Параметры promocode</CardTitle>
                           </CardHeader>
-                          <CardContent className="space-y-3">
+                          <CardContent className="flex flex-col gap-3">
                             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                               <FieldBlock label="Код/идентификатор *" error={fieldErrors.promocode_code}>
                                 <Input
@@ -1517,28 +1495,26 @@ function App() {
         </main>
       </div>
 
-      <Dialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, open }))}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{confirmDialog.title}</DialogTitle>
-            <DialogDescription>{confirmDialog.body}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeConfirmDialog}>
-              Отмена
-            </Button>
-            <Button
-              variant={confirmDialog.danger ? "destructive" : "default"}
+      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, open }))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmDialog.body}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={closeConfirmDialog}>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              className={cn(confirmDialog.danger && "bg-destructive text-destructive-foreground hover:bg-destructive/90")}
               onClick={() => {
                 confirmDialog.action?.()
                 closeConfirmDialog()
               }}
             >
               {confirmDialog.confirmLabel}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -1554,21 +1530,23 @@ function SelectField(props: SelectFieldProps) {
   const { label, value, onChange, options } = props
 
   return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
+    <Field>
+      <FieldLabel>{label}</FieldLabel>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger>
           <SelectValue placeholder="Выберите значение" />
         </SelectTrigger>
         <SelectContent>
-          {options.map((option) => (
-            <SelectItem key={option.value || "empty"} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
+          <SelectGroup>
+            {options.map((option) => (
+              <SelectItem key={option.value || "empty"} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
         </SelectContent>
       </Select>
-    </div>
+    </Field>
   )
 }
 
@@ -1584,12 +1562,12 @@ function FieldBlock(props: FieldBlockProps) {
   const { label, children, error, hint, className } = props
 
   return (
-    <div className={cn("space-y-2", className)}>
-      <Label>{label}</Label>
+    <Field data-invalid={Boolean(error)} className={className}>
+      <FieldLabel>{label}</FieldLabel>
       {children}
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
-      {error ? <p className="text-xs text-rose-600">{error}</p> : null}
-    </div>
+      {hint ? <FieldDescription>{hint}</FieldDescription> : null}
+      <FieldError>{error}</FieldError>
+    </Field>
   )
 }
 
