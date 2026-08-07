@@ -26,6 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { PromoCodesSection } from "@/components/PromoCodesSection"
+import { PersonalPromoSection } from "@/components/PersonalPromoSection"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   AlertDialog,
@@ -52,7 +53,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
-type Screen = "tasks" | "editor" | "discounts" | "promo"
+type Screen = "tasks" | "editor" | "discounts" | "promo" | "personal"
 type RewardFilter = "all" | RewardType
 type TypeFilter = "all" | TaskType
 type StatusFilter = "all" | TaskStatus
@@ -251,6 +252,7 @@ function App() {
   const [globalSearch, setGlobalSearch] = useState("")
   const [promoCreateSignal, setPromoCreateSignal] = useState(0)
   const [discountCreateSignal, setDiscountCreateSignal] = useState(0)
+  const [personalCreateSignal, setPersonalCreateSignal] = useState(0)
 
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
 
@@ -436,6 +438,11 @@ function App() {
   function beginCreateDiscount() {
     setScreen("discounts")
     setDiscountCreateSignal((prev) => prev + 1)
+  }
+
+  function beginCreatePersonal() {
+    setScreen("personal")
+    setPersonalCreateSignal((prev) => prev + 1)
   }
 
   function beginEditTask(task: Task) {
@@ -778,15 +785,29 @@ function App() {
   }
 
   const topActionLabel =
-    screen === "promo" ? "+ Новый промокод" : screen === "discounts" ? "+ Новая скидка" : "+ Новое задание"
+    screen === "promo"
+      ? "+ Новый промокод"
+      : screen === "discounts"
+        ? "+ Новая скидка"
+        : screen === "personal"
+          ? "+ Новый шаблон"
+          : "+ Новое задание"
   const globalSearchPlaceholder =
     screen === "promo"
       ? "код промокода, связанная скидка"
       : screen === "discounts"
         ? "название скидки, продавец, ограничения"
-        : "task_code, заголовок"
+        : screen === "personal"
+          ? "название шаблона, key, код, телефон"
+          : "task_code, заголовок"
   const onTopActionClick =
-    screen === "promo" ? beginCreatePromo : screen === "discounts" ? beginCreateDiscount : beginCreateTask
+    screen === "promo"
+      ? beginCreatePromo
+      : screen === "discounts"
+        ? beginCreateDiscount
+        : screen === "personal"
+          ? beginCreatePersonal
+          : beginCreateTask
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -833,6 +854,13 @@ function App() {
                 onClick={() => setScreen("promo")}
               >
                 Промокоды
+              </Button>
+              <Button
+                className="w-full justify-start"
+                variant={screen === "personal" ? "default" : "secondary"}
+                onClick={() => setScreen("personal")}
+              >
+                Индивидуальные промокоды
               </Button>
             </nav>
           </div>
@@ -1083,6 +1111,14 @@ function App() {
                   promoCreateSignal={promoCreateSignal}
                   discountCreateSignal={discountCreateSignal}
                   onNavigate={(next) => setScreen(next)}
+                />
+              ) : null}
+
+              {screen === "personal" ? (
+                <PersonalPromoSection
+                  globalSearch={globalSearch}
+                  createSignal={personalCreateSignal}
+                  onCreateDiscount={beginCreateDiscount}
                 />
               ) : null}
 
