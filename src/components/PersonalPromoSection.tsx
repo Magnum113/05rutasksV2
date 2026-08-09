@@ -7,17 +7,15 @@ import {
   MOCK_PERSONAL_TEMPLATES,
   PERSONAL_CODE_STATUS_LABELS,
   PERSONAL_CODE_STATUS_OPTIONS,
-  PERSONAL_EXPIRY_MODE_OPTIONS,
+  PERSONAL_ISSUE_LIMIT_SCOPE_OPTIONS,
   PERSONAL_TEMPLATE_STATUS_LABELS,
   PERSONAL_TEMPLATE_STATUS_OPTIONS,
-  PERSONAL_USAGE_MODE_OPTIONS,
   personalRedemptionRate,
   type PersonalCodeInstance,
   type PersonalCodeStatus,
-  type PersonalExpiryMode,
+  type PersonalIssueLimitScope,
   type PersonalTemplate,
   type PersonalTemplateStatus,
-  type PersonalUsageMode,
 } from "@/admin/personalPromo"
 import { formatDate, formatDateTime, parseDate } from "@/admin/utils"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -54,14 +52,11 @@ interface TemplateForm {
   name: string
   key: string
   discount_id: string
-  expiry_mode: PersonalExpiryMode
   ttl_days: string
-  start_date: string
-  end_date: string
   code_prefix: string
   per_user_issue_limit: string
+  issue_limit_scope: PersonalIssueLimitScope
   issue_cap: string
-  usage_mode: PersonalUsageMode
 }
 
 interface SectionFlash {
@@ -88,14 +83,11 @@ function createTemplateForm(): TemplateForm {
     name: "",
     key: "",
     discount_id: "",
-    expiry_mode: "relative",
     ttl_days: "7",
-    start_date: "",
-    end_date: "",
     code_prefix: "GIFT",
     per_user_issue_limit: "1",
+    issue_limit_scope: "all_time",
     issue_cap: "",
-    usage_mode: "one_time",
   }
 }
 
@@ -105,14 +97,11 @@ function templateToForm(template: PersonalTemplate): TemplateForm {
     name: template.name,
     key: template.key,
     discount_id: template.discount_id ?? "",
-    expiry_mode: template.expiry_mode,
-    ttl_days: template.ttl_days === null ? "" : String(template.ttl_days),
-    start_date: template.start_date ?? "",
-    end_date: template.end_date ?? "",
+    ttl_days: String(template.ttl_days),
     code_prefix: template.code_prefix,
     per_user_issue_limit: String(template.per_user_issue_limit),
+    issue_limit_scope: template.issue_limit_scope,
     issue_cap: template.issue_cap === null ? "" : String(template.issue_cap),
-    usage_mode: template.usage_mode,
   }
 }
 
@@ -265,23 +254,9 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
       addError("discount_id", "Для статуса «Активен/Неактивен» нужна связанная скидка")
     }
 
-    if (form.expiry_mode === "relative") {
-      const ttl = Number(form.ttl_days)
-      if (!Number.isInteger(ttl) || ttl <= 0) {
-        addError("ttl_days", "Срок (дней) должен быть целым числом больше 0")
-      }
-    } else {
-      if (!form.start_date) {
-        addError("start_date", "Дата начала обязательна для фиксированного окна")
-      }
-      if (!form.end_date) {
-        addError("end_date", "Дата окончания обязательна для фиксированного окна")
-      }
-      const start = parseDate(form.start_date)
-      const end = parseDate(form.end_date)
-      if (start && end && start > end) {
-        addError("end_date", "Дата начала не может быть позже даты окончания")
-      }
+    const ttl = Number(form.ttl_days)
+    if (!Number.isInteger(ttl) || ttl <= 0) {
+      addError("ttl_days", "Срок (дней) должен быть целым числом больше 0")
     }
 
     const perUser = Number(form.per_user_issue_limit)
@@ -314,14 +289,11 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
       name: form.name.trim(),
       key: form.key.trim(),
       discount_id: form.discount_id ? form.discount_id : null,
-      expiry_mode: form.expiry_mode,
-      ttl_days: form.expiry_mode === "relative" ? Number(form.ttl_days) : null,
-      start_date: form.expiry_mode === "fixed" ? form.start_date : null,
-      end_date: form.expiry_mode === "fixed" ? form.end_date : null,
+      ttl_days: Number(form.ttl_days),
       code_prefix: form.code_prefix.trim(),
       per_user_issue_limit: Number(form.per_user_issue_limit),
+      issue_limit_scope: form.issue_limit_scope,
       issue_cap: form.issue_cap === "" ? null : Number(form.issue_cap),
-      usage_mode: form.usage_mode,
     }
 
     if (editingId) {
@@ -686,49 +658,26 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                <SelectField
-                  label="Режим срока *"
-                  value={form.expiry_mode}
-                  options={PERSONAL_EXPIRY_MODE_OPTIONS}
-                  onChange={(value) => setField("expiry_mode", value as PersonalExpiryMode)}
-                />
-
-                {form.expiry_mode === "relative" ? (
-                  <FieldBlock label="Срок, дней от выдачи *" error={fieldErrors.ttl_days}>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={form.ttl_days}
-                      onChange={(event) => setField("ttl_days", event.target.value)}
-                    />
-                  </FieldBlock>
-                ) : (
-                  <>
-                    <FieldBlock label="Дата начала *" error={fieldErrors.start_date}>
-                      <Input
-                        type="date"
-                        value={form.start_date}
-                        onChange={(event) => setField("start_date", event.target.value)}
-                      />
-                    </FieldBlock>
-
-                    <FieldBlock label="Дата окончания *" error={fieldErrors.end_date}>
-                      <Input
-                        type="date"
-                        value={form.end_date}
-                        onChange={(event) => setField("end_date", event.target.value)}
-                      />
-                    </FieldBlock>
-                  </>
-                )}
+                <FieldBlock
+                  label="Срок, дней от выдачи *"
+                  error={fieldErrors.ttl_days}
+                  hint="Срок всегда относительный — от момента клика"
+                >
+                  <Input
+                    type="number"
+                    min="1"
+                    value={form.ttl_days}
+                    onChange={(event) => setField("ttl_days", event.target.value)}
+                  />
+                </FieldBlock>
               </div>
 
               <Alert>
                 <AlertTitle>Срок ставит бэкенд при выдаче</AlertTitle>
                 <AlertDescription>
-                  Для режима «от момента выдачи» бэкенд по серверному времени вычисляет и сохраняет абсолютный{" "}
-                  <span className="font-semibold">expires_at = момент выдачи + срок</span>. Он неизменяем: правка срока в
-                  шаблоне не влияет на уже выданные коды.
+                  Бэкенд по серверному времени вычисляет и сохраняет абсолютный{" "}
+                  <span className="font-semibold">expires_at = момент выдачи + срок</span> (напр. 7 дн. = ровно 7×24 ч).
+                  Он неизменяем: правка срока в шаблоне не влияет на уже выданные коды.
                 </AlertDescription>
               </Alert>
             </CardContent>
@@ -748,13 +697,6 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
                   />
                 </FieldBlock>
 
-                <SelectField
-                  label="Режим использования *"
-                  value={form.usage_mode}
-                  options={PERSONAL_USAGE_MODE_OPTIONS}
-                  onChange={(value) => setField("usage_mode", value as PersonalUsageMode)}
-                />
-
                 <FieldBlock label="Лимит на пользователя *" error={fieldErrors.per_user_issue_limit}>
                   <Input
                     type="number"
@@ -763,6 +705,13 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
                     onChange={(event) => setField("per_user_issue_limit", event.target.value)}
                   />
                 </FieldBlock>
+
+                <SelectField
+                  label="Подсчёт лимита *"
+                  value={form.issue_limit_scope}
+                  options={PERSONAL_ISSUE_LIMIT_SCOPE_OPTIONS}
+                  onChange={(value) => setField("issue_limit_scope", value as PersonalIssueLimitScope)}
+                />
 
                 <FieldBlock label="Бюджет выдач (issue_cap)" error={fieldErrors.issue_cap}>
                   <Input
@@ -778,6 +727,15 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
               <FieldBlock label="Пример кода">
                 <Input value={`${form.code_prefix || "CODE"}-XXXXXX`} readOnly />
               </FieldBlock>
+
+              <Alert>
+                <AlertDescription>
+                  Подсчёт лимита: <span className="font-semibold">«только активные»</span> — истёкший/погашенный код
+                  освобождает слот (нужно для корзины и winback); <span className="font-semibold">«за всё время»</span> —
+                  один код навсегда, повторной выдачи после истечения нет (для разовых подарков). Код всегда one-time —
+                  гасится один раз.
+                </AlertDescription>
+              </Alert>
             </CardContent>
           </Card>
 

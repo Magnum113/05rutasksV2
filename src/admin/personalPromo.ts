@@ -3,8 +3,9 @@
 // Экземпляр = конкретный код, привязанный к user_id, со своим expires_at.
 
 export type PersonalTemplateStatus = "draft" | "active" | "inactive"
-export type PersonalExpiryMode = "relative" | "fixed"
-export type PersonalUsageMode = "one_time" | "multi_use"
+// Как считать per_user_issue_limit: active — только действующие коды (issued/reserved),
+// истёкший/погашенный освобождает слот; all_time — все выданные когда-либо (без повторной выдачи).
+export type PersonalIssueLimitScope = "active" | "all_time"
 export type PersonalCodeStatus = "issued" | "reserved" | "redeemed" | "expired"
 
 export interface PersonalTemplate {
@@ -13,14 +14,11 @@ export interface PersonalTemplate {
   name: string
   key: string
   discount_id: string | null
-  expiry_mode: PersonalExpiryMode
-  ttl_days: number | null // срок для relative (дней от момента выдачи)
-  start_date: string | null // окно для fixed
-  end_date: string | null // окно для fixed
+  ttl_days: number // срок от момента выдачи (дней); срок всегда относительный
   code_prefix: string
   per_user_issue_limit: number
+  issue_limit_scope: PersonalIssueLimitScope // способ подсчёта per_user_issue_limit
   issue_cap: number | null
-  usage_mode: PersonalUsageMode
   issued_count: number
   redeemed_count: number
   created_at: string
@@ -50,24 +48,14 @@ export const PERSONAL_TEMPLATE_STATUS_OPTIONS: Array<{ value: PersonalTemplateSt
   { value: "inactive", label: PERSONAL_TEMPLATE_STATUS_LABELS.inactive },
 ]
 
-export const PERSONAL_EXPIRY_MODE_LABELS: Record<PersonalExpiryMode, string> = {
-  relative: "Срок от момента выдачи",
-  fixed: "Фиксированное окно",
+export const PERSONAL_ISSUE_LIMIT_SCOPE_LABELS: Record<PersonalIssueLimitScope, string> = {
+  active: "Только активные коды",
+  all_time: "За всё время",
 }
 
-export const PERSONAL_EXPIRY_MODE_OPTIONS: Array<{ value: PersonalExpiryMode; label: string }> = [
-  { value: "relative", label: PERSONAL_EXPIRY_MODE_LABELS.relative },
-  { value: "fixed", label: PERSONAL_EXPIRY_MODE_LABELS.fixed },
-]
-
-export const PERSONAL_USAGE_MODE_LABELS: Record<PersonalUsageMode, string> = {
-  one_time: "one_time",
-  multi_use: "multi_use",
-}
-
-export const PERSONAL_USAGE_MODE_OPTIONS: Array<{ value: PersonalUsageMode; label: string }> = [
-  { value: "one_time", label: PERSONAL_USAGE_MODE_LABELS.one_time },
-  { value: "multi_use", label: PERSONAL_USAGE_MODE_LABELS.multi_use },
+export const PERSONAL_ISSUE_LIMIT_SCOPE_OPTIONS: Array<{ value: PersonalIssueLimitScope; label: string }> = [
+  { value: "active", label: PERSONAL_ISSUE_LIMIT_SCOPE_LABELS.active },
+  { value: "all_time", label: PERSONAL_ISSUE_LIMIT_SCOPE_LABELS.all_time },
 ]
 
 export const PERSONAL_CODE_STATUS_LABELS: Record<PersonalCodeStatus, string> = {
@@ -88,14 +76,11 @@ export const MOCK_PERSONAL_TEMPLATES: PersonalTemplate[] = [
     name: "Подарок за 7 дней",
     key: "gift_7d",
     discount_id: "discount_1022",
-    expiry_mode: "relative",
     ttl_days: 7,
-    start_date: null,
-    end_date: null,
     code_prefix: "GIFT",
     per_user_issue_limit: 1,
+    issue_limit_scope: "all_time",
     issue_cap: 5000,
-    usage_mode: "one_time",
     issued_count: 3120,
     redeemed_count: 415,
     created_at: "2026-07-20T10:00:00",
@@ -106,14 +91,11 @@ export const MOCK_PERSONAL_TEMPLATES: PersonalTemplate[] = [
     name: "Брошенная корзина 48 часов",
     key: "cart_48h",
     discount_id: "discount_1007",
-    expiry_mode: "relative",
     ttl_days: 2,
-    start_date: null,
-    end_date: null,
     code_prefix: "CART",
     per_user_issue_limit: 1,
+    issue_limit_scope: "active",
     issue_cap: null,
-    usage_mode: "one_time",
     issued_count: 1840,
     redeemed_count: 233,
     created_at: "2026-07-22T12:30:00",
@@ -124,14 +106,11 @@ export const MOCK_PERSONAL_TEMPLATES: PersonalTemplate[] = [
     name: "Winback уснувших",
     key: "winback_14d",
     discount_id: "discount_1098",
-    expiry_mode: "relative",
     ttl_days: 14,
-    start_date: null,
-    end_date: null,
     code_prefix: "BACK",
     per_user_issue_limit: 1,
+    issue_limit_scope: "active",
     issue_cap: 8000,
-    usage_mode: "one_time",
     issued_count: 640,
     redeemed_count: 58,
     created_at: "2026-07-18T09:15:00",
@@ -142,14 +121,11 @@ export const MOCK_PERSONAL_TEMPLATES: PersonalTemplate[] = [
     name: "Welcome за первый заказ",
     key: "first_order_welcome",
     discount_id: "discount_1022",
-    expiry_mode: "relative",
     ttl_days: 7,
-    start_date: null,
-    end_date: null,
     code_prefix: "HELLO",
     per_user_issue_limit: 1,
+    issue_limit_scope: "all_time",
     issue_cap: null,
-    usage_mode: "one_time",
     issued_count: 0,
     redeemed_count: 0,
     created_at: "2026-08-01T08:40:00",
@@ -222,10 +198,6 @@ export function personalRedemptionRate(template: Pick<PersonalTemplate, "issued_
   return `${((template.redeemed_count / template.issued_count) * 100).toFixed(1)}%`
 }
 
-export function formatPersonalExpiry(template: Pick<PersonalTemplate, "expiry_mode" | "ttl_days" | "start_date" | "end_date">): string {
-  if (template.expiry_mode === "relative") {
-    return template.ttl_days ? `${template.ttl_days} дн. от выдачи` : "—"
-  }
-
-  return template.start_date && template.end_date ? `${template.start_date} — ${template.end_date}` : "фикс. окно"
+export function formatPersonalExpiry(template: Pick<PersonalTemplate, "ttl_days">): string {
+  return `${template.ttl_days} дн. от выдачи`
 }
