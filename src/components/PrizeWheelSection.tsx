@@ -70,8 +70,6 @@ const SPIN_STATUS_VARIANT: Record<WheelSpinStatus, "default" | "secondary" | "ou
   claim_expired: "outline",
 }
 
-const WHEEL_COLORS = ["#E30614", "#111827", "#F59E0B", "#2563EB", "#059669", "#7C3AED", "#DB2777", "#0891B2"]
-
 function deepCloneCampaign(campaign: WheelCampaign): WheelCampaign {
   return {
     ...campaign,
@@ -294,10 +292,6 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
   )
 
   const selectedPrize = form.prizes.find((prize) => prize.id === selectedPrizeId) ?? null
-  const activePreviewPrizes = form.prizes
-    .filter((prize) => prize.status === "active" && (prize.total_stock === null || prize.issued_count < prize.total_stock))
-    .sort((a, b) => a.visual_order - b.visual_order)
-
   function startCreate() {
     const next = createCampaign()
     setTab("campaigns")
@@ -532,17 +526,6 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
     setForm(createCampaign())
     setSelectedPrizeId(null)
   }
-
-  const wheelBackground =
-    activePreviewPrizes.length > 0
-      ? `conic-gradient(${activePreviewPrizes
-          .map((_, index) => {
-            const start = (index / activePreviewPrizes.length) * 100
-            const end = ((index + 1) / activePreviewPrizes.length) * 100
-            return `${WHEEL_COLORS[index % WHEEL_COLORS.length]} ${start}% ${end}%`
-          })
-          .join(", ")})`
-      : "hsl(var(--muted))"
 
   return (
     <div className="flex flex-col gap-4">
@@ -779,7 +762,7 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
             </Alert>
           ) : null}
 
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="flex flex-col gap-4">
             <div className="flex min-w-0 flex-col gap-4">
               <Card>
                 <CardHeader><CardTitle>Основное</CardTitle></CardHeader>
@@ -821,7 +804,7 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
               <Card>
                 <CardHeader>
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div><CardTitle>Призы</CardTitle><p className="mt-1 text-sm text-muted-foreground">Все активные призы показываются пользователю. Вес влияет только на выбор backend.</p></div>
+                    <div><CardTitle>Призы</CardTitle><p className="mt-1 text-sm text-muted-foreground">В пользовательском интерфейсе активные призы прокручиваются горизонтальной лентой. Вес влияет только на выбор backend.</p></div>
                     <Button onClick={addPrize}><Plus aria-hidden="true" />Добавить приз</Button>
                   </div>
                 </CardHeader>
@@ -917,37 +900,17 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
               ) : null}
             </div>
 
-            <div className="flex flex-col gap-4 xl:sticky xl:top-28 xl:self-start">
-              <Card>
-                <CardHeader><CardTitle>Предпросмотр колеса</CardTitle></CardHeader>
-                <CardContent className="flex flex-col items-center gap-5">
-                  <div className="relative flex h-64 w-64 items-center justify-center rounded-full p-3 shadow-lg ring-1 ring-black/10" style={{ background: wheelBackground }}>
-                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-black/10"><Gift className="h-8 w-8 text-primary" aria-hidden="true" /></div>
-                    <div className="absolute -top-3 h-0 w-0 border-x-[12px] border-t-[22px] border-x-transparent border-t-foreground" aria-hidden="true" />
-                  </div>
-                  <div className="w-full space-y-2">
-                    {activePreviewPrizes.length === 0 ? <p className="text-center text-sm text-muted-foreground">Добавьте активные призы</p> : activePreviewPrizes.map((prize, index) => (
-                      <div key={prize.id} className="flex items-center gap-2 text-sm">
-                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: WHEEL_COLORS[index % WHEEL_COLORS.length] }} />
-                        <span className="min-w-0 flex-1 truncate">{prize.display_name || prize.internal_name || `Приз ${index + 1}`}</span>
-                        <span className="tabular-nums text-muted-foreground">{formatProbability(effectiveProbability(prize, form.prizes))}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-xs leading-relaxed text-muted-foreground">Вероятности видны только здесь, в админке. Пользователь видит активные призы без весов и процентов.</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader><CardTitle>Правила механики</CardTitle></CardHeader>
-                <CardContent className="space-y-3 text-sm text-muted-foreground">
-                  <p>Каждое вращение гарантирует один приз. Сектора «Без приза» нет.</p>
-                  <p>До получения предыдущего приза следующее вращение заблокировано.</p>
-                  <p>Запас закончился — приз исключается, остальные продолжают выпадать по своим весам.</p>
-                  <p>В полноценной версии вращение за очки стоит 10 очков без дневного и общего лимита.</p>
-                </CardContent>
-              </Card>
-            </div>
+            <Card>
+              <CardHeader><CardTitle>Правила механики</CardTitle></CardHeader>
+              <CardContent className="grid grid-cols-1 gap-3 text-sm text-muted-foreground md:grid-cols-2">
+                <p>Каждое вращение гарантирует один приз. Варианта «Без приза» нет.</p>
+                <p>Пользователь видит горизонтальную ленту активных призов без весов и процентов.</p>
+                <p>Backend заранее фиксирует результат, после чего лента останавливается на выбранном призе.</p>
+                <p>До получения предыдущего приза следующее вращение заблокировано.</p>
+                <p>Запас закончился — приз исключается, остальные продолжают выпадать по своим весам.</p>
+                <p>В полноценной версии вращение за очки стоит 10 очков без дневного и общего лимита.</p>
+              </CardContent>
+            </Card>
           </div>
 
           <div className="sticky bottom-0 z-10 flex flex-col gap-2 border-t bg-background/95 py-4 backdrop-blur sm:flex-row sm:justify-end">
