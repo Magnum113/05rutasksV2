@@ -11,7 +11,6 @@ export type WheelSpinStatus =
 
 export interface WheelPrize {
   id: string
-  internal_name: string
   display_name: string
   description: string
   image_url: string
@@ -118,7 +117,6 @@ export const MOCK_WHEEL_CAMPAIGNS: WheelCampaign[] = [
     prizes: [
       {
         id: "prize_bonus_100",
-        internal_name: "100 бонусов",
         display_name: "100 бонусов",
         description: "Начислим после получения. Срок действия определяется правилами бонусной программы.",
         image_url: "https://images.unsplash.com/photo-1607082349566-187342175e2f?auto=format&fit=crop&w=400&q=80",
@@ -142,7 +140,6 @@ export const MOCK_WHEEL_CAMPAIGNS: WheelCampaign[] = [
       },
       {
         id: "prize_points_20",
-        internal_name: "20 очков активности",
         display_name: "20 очков активности",
         description: "Хватит на два новых вращения. Очки действуют 30 дней.",
         image_url: "https://images.unsplash.com/photo-1551024506-0bccd828d307?auto=format&fit=crop&w=400&q=80",
@@ -166,7 +163,6 @@ export const MOCK_WHEEL_CAMPAIGNS: WheelCampaign[] = [
       },
       {
         id: "prize_personal_10",
-        internal_name: "Персональная скидка 10%",
         display_name: "Скидка 10%",
         description: "На бытовую технику. Промокод действует 7 дней с момента получения.",
         image_url: "https://images.unsplash.com/photo-1607083206968-13611e3d76db?auto=format&fit=crop&w=400&q=80",
@@ -190,7 +186,6 @@ export const MOCK_WHEEL_CAMPAIGNS: WheelCampaign[] = [
       },
       {
         id: "prize_bonus_10000",
-        internal_name: "Главный приз — 10 000 бонусов",
         display_name: "10 000 бонусов",
         description: "Главный бонусный приз колеса.",
         image_url: "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=400&q=80",

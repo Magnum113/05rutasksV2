@@ -124,7 +124,6 @@ function createPrize(campaign: WheelCampaign): WheelPrize {
   const order = campaign.prizes.length + 1
   return {
     id: `prize_${Math.random().toString(36).slice(2, 9)}`,
-    internal_name: "",
     display_name: "",
     description: "",
     image_url: "",
@@ -443,8 +442,7 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
     form.prizes.forEach((prize, index) => {
       const prefix = `prize.${prize.id}`
       const label = `Приз ${index + 1}`
-      if (!prize.internal_name.trim()) addError(`${prefix}.internal_name`, `${label}: внутреннее название обязательно`)
-      if (!prize.display_name.trim()) addError(`${prefix}.display_name`, `${label}: название для пользователя обязательно`)
+      if (!prize.display_name.trim()) addError(`${prefix}.display_name`, `${label}: название приза обязательно`)
       if (!prize.description.trim()) addError(`${prefix}.description`, `${label}: описание обязательно`)
       if (!prize.image_url.trim()) addError(`${prefix}.image_url`, `${label}: изображение обязательно`)
       if (!prize.action_button_text.trim()) addError(`${prefix}.action_button_text`, `${label}: текст кнопки обязателен`)
@@ -841,10 +839,9 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
                     </div>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-4">
-                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                      <FieldBlock label="Внутреннее название *" error={fieldErrors[`prize.${selectedPrize.id}.internal_name`]}><Input value={selectedPrize.internal_name} onChange={(event) => setPrizeField(selectedPrize.id, "internal_name", event.target.value)} /></FieldBlock>
-                      <FieldBlock label="Название для пользователя *" error={fieldErrors[`prize.${selectedPrize.id}.display_name`]}><Input value={selectedPrize.display_name} onChange={(event) => setPrizeField(selectedPrize.id, "display_name", event.target.value)} /></FieldBlock>
-                    </div>
+                    <FieldBlock label="Название приза *" error={fieldErrors[`prize.${selectedPrize.id}.display_name`]}>
+                      <Input value={selectedPrize.display_name} onChange={(event) => setPrizeField(selectedPrize.id, "display_name", event.target.value)} />
+                    </FieldBlock>
                     <FieldBlock label="Описание *" hint="Для промокода укажите, на что он действует и в течение какого срока." error={fieldErrors[`prize.${selectedPrize.id}.description`]}><Textarea value={selectedPrize.description} onChange={(event) => setPrizeField(selectedPrize.id, "description", event.target.value)} rows={3} /></FieldBlock>
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                       <FieldBlock label="Изображение *" error={fieldErrors[`prize.${selectedPrize.id}.image_url`]}><Input value={selectedPrize.image_url} onChange={(event) => setPrizeField(selectedPrize.id, "image_url", event.target.value)} placeholder="https://..." /></FieldBlock>
