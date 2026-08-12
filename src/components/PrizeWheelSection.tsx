@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react"
-import { ChevronDown, ChevronUp, Eye, EyeOff, Gift, Plus, RotateCcw, Settings2, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronUp, Eye, EyeOff, Gift, Plus, RotateCcw, Save, Settings2, Trash2 } from "lucide-react"
 
 import {
   MOCK_WHEEL_CAMPAIGNS,
@@ -525,6 +525,30 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
     setSelectedPrizeId(null)
   }
 
+  function saveSelectedPrize(prizeId: string) {
+    const validation = validate(false)
+    const prefix = `prize.${prizeId}.`
+    const prizeFieldErrors = Object.fromEntries(
+      Object.entries(validation.fields).filter(([field]) => field.startsWith(prefix)),
+    )
+    const prizeErrors = Object.values(prizeFieldErrors)
+
+    setFieldErrors((previous) => ({
+      ...Object.fromEntries(Object.entries(previous).filter(([field]) => !field.startsWith(prefix))),
+      ...prizeFieldErrors,
+    }))
+
+    if (prizeErrors.length > 0) {
+      setFormErrors(prizeErrors)
+      setFlash({ type: "error", text: "Проверьте обязательные поля приза" })
+      return
+    }
+
+    setFormErrors([])
+    setFlash({ type: "success", text: "Приз сохранён в настройках" })
+    setSelectedPrizeId(null)
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -893,6 +917,12 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
                       </div>
                     ) : null}
                   </CardContent>
+                  <CardFooter className="justify-end border-t pt-4">
+                    <Button onClick={() => saveSelectedPrize(selectedPrize.id)}>
+                      <Save aria-hidden="true" />
+                      Сохранить приз
+                    </Button>
+                  </CardFooter>
                 </Card>
               ) : null}
             </div>
