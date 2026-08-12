@@ -2,16 +2,14 @@ import { type ReactNode, useEffect, useMemo, useState } from "react"
 import { ChevronDown, ChevronUp, Eye, EyeOff, Gift, Plus, RotateCcw, Save, Settings2, Trash2 } from "lucide-react"
 
 import {
-  MOCK_WHEEL_CAMPAIGNS,
+  MOCK_WHEEL_CONFIGURATION,
   MOCK_WHEEL_SPINS,
-  type WheelCampaign,
-  type WheelCampaignStatus,
   type WheelChannel,
+  type WheelConfiguration,
   type WheelPrize,
   type WheelPromocodeMode,
   type WheelRewardType,
   type WheelSpinStatus,
-  WHEEL_CAMPAIGN_STATUS_LABELS,
   WHEEL_CHANNEL_LABELS,
   WHEEL_REWARD_TYPE_LABELS,
   WHEEL_SPIN_STATUS_LABELS,
@@ -32,34 +30,18 @@ import { cn } from "@/lib/utils"
 
 interface PrizeWheelSectionProps {
   globalSearch: string
-  createSignal: number
 }
 
-type WheelTab = "campaigns" | "spins"
-type ViewMode = "list" | "editor"
-
-interface CampaignFilters {
-  status: "all" | WheelCampaignStatus
-  channel: "all" | WheelChannel
-}
+type WheelTab = "settings" | "spins"
 
 interface SpinFilters {
   status: "all" | WheelSpinStatus
   rewardType: "all" | WheelRewardType
-  campaignId: "all" | string
 }
 
 interface SectionFlash {
   type: "success" | "error" | "info"
   text: string
-}
-
-const CAMPAIGN_STATUS_VARIANT: Record<WheelCampaignStatus, "default" | "secondary" | "outline"> = {
-  draft: "outline",
-  scheduled: "outline",
-  active: "default",
-  paused: "secondary",
-  completed: "secondary",
 }
 
 const SPIN_STATUS_VARIANT: Record<WheelSpinStatus, "default" | "secondary" | "outline" | "destructive"> = {
@@ -70,58 +52,23 @@ const SPIN_STATUS_VARIANT: Record<WheelSpinStatus, "default" | "secondary" | "ou
   claim_expired: "outline",
 }
 
-function deepCloneCampaign(campaign: WheelCampaign): WheelCampaign {
+function deepCloneConfiguration(configuration: WheelConfiguration): WheelConfiguration {
   return {
-    ...campaign,
-    channels: [...campaign.channels],
-    prizes: campaign.prizes.map((prize) => ({ ...prize })),
+    ...configuration,
+    channels: [...configuration.channels],
+    prizes: configuration.prizes.map((prize) => ({ ...prize })),
   }
 }
 
-function addDaysToDateTime(value: string, days: number): string {
-  const date = parseDate(value)
-  if (!date) {
-    return value
-  }
-  date.setDate(date.getDate() + days)
+function toDateTimeInput(date: Date): string {
   const offset = date.getTimezoneOffset()
   return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16)
 }
 
-function createCampaign(): WheelCampaign {
+function createPrize(configuration: WheelConfiguration): WheelPrize {
   const start = new Date()
   const end = new Date(start.getTime() + 30 * 86400000)
-  const toInput = (date: Date) => {
-    const offset = date.getTimezoneOffset()
-    return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16)
-  }
-  const activeFrom = toInput(start)
-  const activeTo = toInput(end)
-
-  return {
-    id: `wheel_${Math.random().toString(36).slice(2, 9)}`,
-    internal_name: "",
-    title: "",
-    description: "",
-    status: "draft",
-    active_from: activeFrom,
-    active_to: activeTo,
-    claim_until: addDaysToDateTime(activeTo, 7),
-    initial_free_spins: 5,
-    audience: "all_authorized",
-    channels: ["web", "app_webview"],
-    game_rules_url: "",
-    config_version: 1,
-    prizes: [],
-    participants_count: 0,
-    spins_count: 0,
-    rewards_issued_count: 0,
-    errors_count: 0,
-  }
-}
-
-function createPrize(campaign: WheelCampaign): WheelPrize {
-  const order = campaign.prizes.length + 1
+  const order = configuration.prizes.length + 1
   return {
     id: `prize_${Math.random().toString(36).slice(2, 9)}`,
     display_name: "",
@@ -129,8 +76,8 @@ function createPrize(campaign: WheelCampaign): WheelPrize {
     image_url: "",
     action_button_text: "Перейти в каталог",
     action_button_url: "/catalog",
-    display_from: campaign.active_from,
-    display_to: campaign.active_to,
+    display_from: toDateTimeInput(start),
+    display_to: toDateTimeInput(end),
     selection_weight: 100,
     total_stock: null,
     issued_count: 0,
@@ -152,9 +99,19 @@ function isValidLink(value: string): boolean {
 }
 
 function effectiveProbability(prize: WheelPrize, prizes: WheelPrize[]): number {
-  const available = prizes.filter(
-    (item) => item.status === "active" && (item.total_stock === null || item.issued_count < item.total_stock),
-  )
+  const now = new Date()
+  const available = prizes.filter((item) => {
+    const displayFrom = parseDate(item.display_from)
+    const displayTo = parseDate(item.display_to)
+    return (
+      item.status === "active" &&
+      displayFrom !== null &&
+      displayTo !== null &&
+      displayFrom <= now &&
+      now <= displayTo &&
+      (item.total_stock === null || item.issued_count < item.total_stock)
+    )
+  })
   const sum = available.reduce((acc, item) => acc + item.selection_weight, 0)
   if (sum <= 0 || !available.some((item) => item.id === prize.id)) {
     return 0
@@ -213,27 +170,17 @@ function SelectField(props: {
   )
 }
 
-export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSectionProps) {
-  const [campaigns, setCampaigns] = useState<WheelCampaign[]>(MOCK_WHEEL_CAMPAIGNS)
-  const [tab, setTab] = useState<WheelTab>("campaigns")
-  const [viewMode, setViewMode] = useState<ViewMode>("list")
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState<WheelCampaign>(createCampaign)
+export function PrizeWheelSection({ globalSearch }: PrizeWheelSectionProps) {
+  const [configuration, setConfiguration] = useState<WheelConfiguration>(() =>
+    deepCloneConfiguration(MOCK_WHEEL_CONFIGURATION),
+  )
+  const [tab, setTab] = useState<WheelTab>("settings")
+  const [form, setForm] = useState<WheelConfiguration>(() => deepCloneConfiguration(MOCK_WHEEL_CONFIGURATION))
   const [selectedPrizeId, setSelectedPrizeId] = useState<string | null>(null)
   const [formErrors, setFormErrors] = useState<string[]>([])
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [flash, setFlash] = useState<SectionFlash | null>(null)
-  const [wheelVisibilityEnabled, setWheelVisibilityEnabled] = useState(true)
-  const [campaignFilters, setCampaignFilters] = useState<CampaignFilters>({ status: "all", channel: "all" })
-  const [spinFilters, setSpinFilters] = useState<SpinFilters>({ status: "all", rewardType: "all", campaignId: "all" })
-
-  useEffect(() => {
-    if (createSignal === 0) {
-      return
-    }
-    startCreate()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createSignal])
+  const [spinFilters, setSpinFilters] = useState<SpinFilters>({ status: "all", rewardType: "all" })
 
   useEffect(() => {
     if (!flash) {
@@ -244,28 +191,9 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
   }, [flash])
 
   const query = globalSearch.trim().toLowerCase()
-  const campaignById = useMemo(() => new Map(campaigns.map((campaign) => [campaign.id, campaign])), [campaigns])
   const allPrizesById = useMemo(
-    () => new Map(campaigns.flatMap((campaign) => campaign.prizes.map((prize) => [prize.id, prize] as const))),
-    [campaigns],
-  )
-
-  const filteredCampaigns = useMemo(
-    () =>
-      campaigns.filter((campaign) => {
-        const haystack = `${campaign.internal_name} ${campaign.title} ${campaign.id}`.toLowerCase()
-        if (query && !haystack.includes(query)) {
-          return false
-        }
-        if (campaignFilters.status !== "all" && campaign.status !== campaignFilters.status) {
-          return false
-        }
-        if (campaignFilters.channel !== "all" && !campaign.channels.includes(campaignFilters.channel)) {
-          return false
-        }
-        return true
-      }),
-    [campaignFilters, campaigns, query],
+    () => new Map(configuration.prizes.map((prize) => [prize.id, prize] as const)),
+    [configuration.prizes],
   )
 
   const filteredSpins = useMemo(
@@ -282,36 +210,13 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
         if (spinFilters.rewardType !== "all" && spin.reward_type !== spinFilters.rewardType) {
           return false
         }
-        if (spinFilters.campaignId !== "all" && spin.campaign_id !== spinFilters.campaignId) {
-          return false
-        }
         return true
       }),
     [allPrizesById, query, spinFilters],
   )
 
   const selectedPrize = form.prizes.find((prize) => prize.id === selectedPrizeId) ?? null
-  function startCreate() {
-    const next = createCampaign()
-    setTab("campaigns")
-    setEditingId(null)
-    setForm(next)
-    setSelectedPrizeId(null)
-    setFormErrors([])
-    setFieldErrors({})
-    setViewMode("editor")
-  }
-
-  function startEdit(campaign: WheelCampaign) {
-    setEditingId(campaign.id)
-    setForm(deepCloneCampaign(campaign))
-    setSelectedPrizeId(campaign.prizes[0]?.id ?? null)
-    setFormErrors([])
-    setFieldErrors({})
-    setViewMode("editor")
-  }
-
-  function setCampaignField<K extends keyof WheelCampaign>(key: K, value: WheelCampaign[K]) {
+  function setConfigurationField<K extends keyof WheelConfiguration>(key: K, value: WheelConfiguration[K]) {
     setForm((previous) => ({ ...previous, [key]: value }))
   }
 
@@ -375,38 +280,6 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
     })
   }
 
-  function duplicateCampaign(campaign: WheelCampaign) {
-    const copy = deepCloneCampaign(campaign)
-    copy.id = `wheel_${Math.random().toString(36).slice(2, 9)}`
-    copy.internal_name = `${campaign.internal_name} — копия`
-    copy.status = "draft"
-    copy.config_version = 1
-    copy.participants_count = 0
-    copy.spins_count = 0
-    copy.rewards_issued_count = 0
-    copy.errors_count = 0
-    copy.prizes = copy.prizes.map((prize, index) => ({
-      ...prize,
-      id: `prize_${Math.random().toString(36).slice(2, 9)}_${index}`,
-      issued_count: 0,
-      one_c_marketing_event_id: prize.reward_type === "bonus" ? null : prize.one_c_marketing_event_id,
-    }))
-    setCampaigns((previous) => [copy, ...previous])
-    setFlash({
-      type: "success",
-      text: "Запуск продублирован. Для бонусных призов нужно указать новые идентификаторы мероприятий 1С.",
-    })
-    startEdit(copy)
-  }
-
-  function togglePause(campaign: WheelCampaign) {
-    const nextStatus: WheelCampaignStatus = campaign.status === "paused" ? "active" : "paused"
-    setCampaigns((previous) =>
-      previous.map((item) => (item.id === campaign.id ? { ...item, status: nextStatus } : item)),
-    )
-    setFlash({ type: "success", text: nextStatus === "paused" ? "Запуск временно приостановлен" : "Запуск продолжен" })
-  }
-
   function validate(publish: boolean): { errors: string[]; fields: Record<string, string> } {
     const errors: string[] = []
     const fields: Record<string, string> = {}
@@ -415,29 +288,13 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
       errors.push(message)
     }
 
-    if (!form.internal_name.trim()) addError("internal_name", "Внутреннее название обязательно")
     if (!form.title.trim()) addError("title", "Заголовок для пользователя обязателен")
-    if (!form.description.trim()) addError("description", "Описание запуска обязательно")
-    if (!form.active_from) addError("active_from", "Дата начала обязательна")
-    if (!form.active_to) addError("active_to", "Дата окончания обязательна")
-    if (parseDate(form.active_from) && parseDate(form.active_to) && parseDate(form.active_from)! >= parseDate(form.active_to)!) {
-      addError("active_to", "Дата окончания должна быть позже даты начала")
-    }
-    if (!form.claim_until || (parseDate(form.claim_until) && parseDate(form.active_to) && parseDate(form.claim_until)! < parseDate(form.active_to)!)) {
-      addError("claim_until", "Срок получения призов не может быть раньше окончания запуска")
-    }
+    if (!form.description.trim()) addError("description", "Описание колеса обязательно")
     if (!isValidLink(form.game_rules_url)) addError("game_rules_url", "Укажите корректную ссылку на «Правила игры»")
     if (form.channels.length === 0) addError("channels", "Выберите хотя бы один канал")
     if (publish && form.prizes.length === 0) addError("prizes", "Для публикации добавьте хотя бы один приз")
 
     const eventIds = new Set<string>()
-    const externalEventIds = new Set(
-      campaigns
-        .filter((campaign) => campaign.id !== editingId)
-        .flatMap((campaign) => campaign.prizes)
-        .map((prize) => prize.one_c_marketing_event_id)
-        .filter((value): value is string => Boolean(value)),
-    )
 
     form.prizes.forEach((prize, index) => {
       const prefix = `prize.${prize.id}`
@@ -453,14 +310,16 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
       if (prize.total_stock !== null && (!Number.isInteger(prize.total_stock) || prize.total_stock <= 0)) {
         addError(`${prefix}.total_stock`, `${label}: запас должен быть пустым или целым числом больше 0`)
       }
-      if (!prize.display_from || !prize.display_to || parseDate(prize.display_from)! >= parseDate(prize.display_to)!) {
+      const displayFrom = parseDate(prize.display_from)
+      const displayTo = parseDate(prize.display_to)
+      if (!displayFrom || !displayTo || displayFrom >= displayTo) {
         addError(`${prefix}.display_to`, `${label}: проверьте период показа`)
       }
 
       if (prize.reward_type === "bonus") {
         const eventId = prize.one_c_marketing_event_id?.trim() ?? ""
         if (!eventId) addError(`${prefix}.one_c_marketing_event_id`, `${label}: идентификатор мероприятия 1С обязателен`)
-        if (eventId && (eventIds.has(eventId) || externalEventIds.has(eventId))) {
+        if (eventId && eventIds.has(eventId)) {
           addError(`${prefix}.one_c_marketing_event_id`, `${label}: мероприятие 1С уже используется другим бонусным призом`)
         }
         eventIds.add(eventId)
@@ -492,36 +351,19 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
     setFormErrors(validation.errors)
     setFieldErrors(validation.fields)
     if (validation.errors.length > 0) {
-      setFlash({ type: "error", text: "Проверьте обязательные поля запуска и призов" })
+      setFlash({ type: "error", text: "Проверьте обязательные поля колеса и призов" })
       return
     }
 
-    const now = new Date()
-    const start = parseDate(form.active_from)
-    const nextStatus: WheelCampaignStatus = publish
-      ? start && start > now
-        ? "scheduled"
-        : "active"
-      : editingId
-        ? form.status
-        : "draft"
-    const payload: WheelCampaign = {
+    const payload: WheelConfiguration = {
       ...form,
-      status: nextStatus,
-      config_version: editingId && publish ? form.config_version + 1 : form.config_version,
+      config_version: publish ? form.config_version + 1 : form.config_version,
       prizes: form.prizes.map((prize, index) => ({ ...prize, visual_order: index + 1 })),
     }
 
-    setCampaigns((previous) => {
-      if (!editingId) {
-        return [payload, ...previous]
-      }
-      return previous.map((campaign) => (campaign.id === editingId ? payload : campaign))
-    })
-    setFlash({ type: "success", text: publish ? "Запуск опубликован" : "Черновик сохранён" })
-    setEditingId(null)
-    setViewMode("list")
-    setForm(createCampaign())
+    setConfiguration(deepCloneConfiguration(payload))
+    setForm(deepCloneConfiguration(payload))
+    setFlash({ type: "success", text: publish ? `Опубликована версия v${payload.config_version}` : "Настройки сохранены" })
     setSelectedPrizeId(null)
   }
 
@@ -555,14 +397,14 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
         <div>
           <h2 className="text-2xl font-semibold">Колесо призов</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Запуски, призы, веса выпадения и контроль фактической выдачи наград.
+            Одна постоянная механика: настройки, призы, веса выпадения и контроль выдачи наград.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant={tab === "campaigns" ? "default" : "secondary"} onClick={() => setTab("campaigns")}>
-            Запуски
+          <Button variant={tab === "settings" ? "default" : "secondary"} onClick={() => setTab("settings")}>
+            Настройки колеса
           </Button>
-          <Button variant={tab === "spins" ? "default" : "secondary"} onClick={() => { setTab("spins"); setViewMode("list") }}>
+          <Button variant={tab === "spins" ? "default" : "secondary"} onClick={() => setTab("spins")}>
             Реестр вращений
           </Button>
         </div>
@@ -575,147 +417,45 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
         </Alert>
       ) : null}
 
-      <Card className={cn(!wheelVisibilityEnabled && "border-amber-300 bg-amber-50/60")}>
+      <Card className={cn(!form.wheel_visibility_enabled && "border-amber-300 bg-amber-50/60")}>
         <CardContent className="flex flex-col gap-4 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <div className="rounded-lg bg-secondary p-2 text-secondary-foreground">
-              {wheelVisibilityEnabled ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
+              {form.wheel_visibility_enabled ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
             </div>
             <div>
               <p className="font-semibold">Показывать колесо во всех локациях</p>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                Флаг полноценной механики. При выключении точки входа скрываются и новые вращения блокируются,
+                Флаг Итерации 2. При выключении точки входа скрываются и новые вращения блокируются,
                 но остаток вращений, история и уже выигранные призы сохраняются.
               </p>
             </div>
           </div>
           <Field orientation="horizontal" className="w-auto shrink-0">
             <Checkbox
-              checked={wheelVisibilityEnabled}
+              checked={form.wheel_visibility_enabled}
               onCheckedChange={(checked) => {
-                setWheelVisibilityEnabled(checked === true)
+                setConfigurationField("wheel_visibility_enabled", checked === true)
                 setFlash({
                   type: "info",
-                  text: checked === true ? "Колесо показывается во всех локациях" : "Колесо скрыто во всех локациях",
+                  text:
+                    checked === true
+                      ? "Колесо будет показываться после сохранения настройки"
+                      : "Колесо будет скрыто после сохранения настройки",
                 })
               }}
               aria-label="Показывать колесо во всех локациях"
             />
-            <FieldLabel>{wheelVisibilityEnabled ? "Включено" : "Выключено"}</FieldLabel>
+            <FieldLabel>{form.wheel_visibility_enabled ? "Включено" : "Выключено"}</FieldLabel>
           </Field>
         </CardContent>
       </Card>
-
-      {tab === "campaigns" && viewMode === "list" ? (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle>Фильтры запусков</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <SelectField
-                label="Статус"
-                value={campaignFilters.status}
-                options={[
-                  { value: "all", label: "Все статусы" },
-                  ...Object.entries(WHEEL_CAMPAIGN_STATUS_LABELS).map(([value, label]) => ({ value, label })),
-                ]}
-                onChange={(value) => setCampaignFilters((previous) => ({ ...previous, status: value as CampaignFilters["status"] }))}
-              />
-              <SelectField
-                label="Канал"
-                value={campaignFilters.channel}
-                options={[
-                  { value: "all", label: "Все каналы" },
-                  ...Object.entries(WHEEL_CHANNEL_LABELS).map(([value, label]) => ({ value, label })),
-                ]}
-                onChange={(value) => setCampaignFilters((previous) => ({ ...previous, channel: value as CampaignFilters["channel"] }))}
-              />
-            </CardContent>
-            <CardFooter>
-              <Button variant="outline" onClick={() => setCampaignFilters({ status: "all", channel: "all" })}>
-                Сбросить фильтры
-              </Button>
-            </CardFooter>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="rounded-md border bg-card">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Запуск</TableHead>
-                      <TableHead>Период</TableHead>
-                      <TableHead>Каналы</TableHead>
-                      <TableHead>Призы</TableHead>
-                      <TableHead>Участники / вращения</TableHead>
-                      <TableHead>Выдано / ошибки</TableHead>
-                      <TableHead>Статус</TableHead>
-                      <TableHead>Действия</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredCampaigns.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
-                          Запуски по текущим фильтрам не найдены.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredCampaigns.map((campaign) => (
-                        <TableRow key={campaign.id}>
-                          <TableCell>
-                            <p className="font-semibold">{campaign.internal_name}</p>
-                            <p className="mt-1 text-xs text-muted-foreground">v{campaign.config_version} · {campaign.id}</p>
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {formatDateTime(campaign.active_from)}
-                            <br />
-                            {formatDateTime(campaign.active_to)}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {campaign.channels.map((channel) => <Badge key={channel} variant="outline">{WHEEL_CHANNEL_LABELS[channel]}</Badge>)}
-                            </div>
-                          </TableCell>
-                          <TableCell>{campaign.prizes.length}</TableCell>
-                          <TableCell>{campaign.participants_count.toLocaleString("ru-RU")} / {campaign.spins_count.toLocaleString("ru-RU")}</TableCell>
-                          <TableCell>{campaign.rewards_issued_count.toLocaleString("ru-RU")} / {campaign.errors_count}</TableCell>
-                          <TableCell><Badge variant={CAMPAIGN_STATUS_VARIANT[campaign.status]}>{WHEEL_CAMPAIGN_STATUS_LABELS[campaign.status]}</Badge></TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              <Button size="sm" variant="outline" onClick={() => startEdit(campaign)}>Изменить</Button>
-                              <Button size="sm" variant="outline" onClick={() => duplicateCampaign(campaign)}>Дублировать</Button>
-                              {campaign.status === "active" || campaign.status === "paused" ? (
-                                <Button size="sm" variant="outline" onClick={() => togglePause(campaign)}>
-                                  {campaign.status === "paused" ? "Продолжить" : "На паузу"}
-                                </Button>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      ) : null}
 
       {tab === "spins" ? (
         <>
           <Card>
             <CardHeader><CardTitle>Фильтры реестра</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <SelectField
-                label="Запуск"
-                value={spinFilters.campaignId}
-                options={[{ value: "all", label: "Все запуски" }, ...campaigns.map((campaign) => ({ value: campaign.id, label: campaign.internal_name }))]}
-                onChange={(value) => setSpinFilters((previous) => ({ ...previous, campaignId: value as SpinFilters["campaignId"] }))}
-              />
+            <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <SelectField
                 label="Тип награды"
                 value={spinFilters.rewardType}
@@ -738,8 +478,8 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
                     <TableRow>
                       <TableHead>spin_id / дата</TableHead>
                       <TableHead>Пользователь</TableHead>
-                      <TableHead>Запуск</TableHead>
                       <TableHead>Приз</TableHead>
+                      <TableHead>Версия</TableHead>
                       <TableHead>Статус</TableHead>
                       <TableHead>Операция / повторы</TableHead>
                     </TableRow>
@@ -747,13 +487,12 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
                   <TableBody>
                     {filteredSpins.map((spin) => {
                       const prize = allPrizesById.get(spin.prize_id)
-                      const campaign = campaignById.get(spin.campaign_id)
                       return (
                         <TableRow key={spin.id}>
                           <TableCell><p className="font-semibold">{spin.id}</p><p className="text-xs text-muted-foreground">{formatDateTime(spin.created_at)}</p></TableCell>
                           <TableCell><p>{spin.user_id}</p><p className="text-xs text-muted-foreground">{spin.phone}</p></TableCell>
-                          <TableCell>{campaign?.internal_name ?? spin.campaign_id}</TableCell>
                           <TableCell><p className="font-medium">{prize?.display_name ?? spin.prize_id}</p><Badge variant="outline">{WHEEL_REWARD_TYPE_LABELS[spin.reward_type]}</Badge></TableCell>
+                          <TableCell>v{spin.config_version}</TableCell>
                           <TableCell><Badge variant={SPIN_STATUS_VARIANT[spin.status]}>{WHEEL_SPIN_STATUS_LABELS[spin.status]}</Badge></TableCell>
                           <TableCell><p>{spin.external_operation_id ?? "—"}</p><p className="text-xs text-muted-foreground">Повторов: {spin.retries}</p></TableCell>
                         </TableRow>
@@ -767,14 +506,21 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
         </>
       ) : null}
 
-      {tab === "campaigns" && viewMode === "editor" ? (
+      {tab === "settings" ? (
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h3 className="text-xl font-semibold">{editingId ? "Редактировать запуск" : "Новый запуск колеса"}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">MVP выдаёт каждому авторизованному пользователю ровно 5 бесплатных вращений.</p>
+              <h3 className="text-xl font-semibold">Настройки общего колеса</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Пять бесплатных вращений выдаются каждому авторизованному пользователю один раз за всё время.</p>
             </div>
-            <Button variant="outline" onClick={() => setViewMode("list")}>Вернуться к списку</Button>
+            <Badge variant="outline">Опубликована версия v{configuration.config_version}</Badge>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Участники</p><p className="mt-1 text-2xl font-semibold tabular-nums">{configuration.participants_count.toLocaleString("ru-RU")}</p></CardContent></Card>
+            <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Вращения</p><p className="mt-1 text-2xl font-semibold tabular-nums">{configuration.spins_count.toLocaleString("ru-RU")}</p></CardContent></Card>
+            <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Награды выданы</p><p className="mt-1 text-2xl font-semibold tabular-nums">{configuration.rewards_issued_count.toLocaleString("ru-RU")}</p></CardContent></Card>
+            <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Ошибки выдачи</p><p className="mt-1 text-2xl font-semibold tabular-nums">{configuration.errors_count.toLocaleString("ru-RU")}</p></CardContent></Card>
           </div>
 
           {formErrors.length > 0 ? (
@@ -787,34 +533,25 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
           <div className="flex flex-col gap-4">
             <div className="flex min-w-0 flex-col gap-4">
               <Card>
-                <CardHeader><CardTitle>Основное</CardTitle></CardHeader>
+                <CardHeader><CardTitle>Основные настройки</CardTitle></CardHeader>
                 <CardContent className="flex flex-col gap-4">
-                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                    <FieldBlock label="Внутреннее название *" error={fieldErrors.internal_name}>
-                      <Input value={form.internal_name} onChange={(event) => setCampaignField("internal_name", event.target.value)} placeholder="Август — первый запуск" />
-                    </FieldBlock>
-                    <FieldBlock label="Заголовок для пользователя *" error={fieldErrors.title}>
-                      <Input value={form.title} onChange={(event) => setCampaignField("title", event.target.value)} placeholder="Крутите колесо и забирайте приз" />
-                    </FieldBlock>
-                  </div>
-                  <FieldBlock label="Описание *" error={fieldErrors.description}>
-                    <Textarea value={form.description} onChange={(event) => setCampaignField("description", event.target.value)} rows={3} />
+                  <FieldBlock label="Заголовок для пользователя *" error={fieldErrors.title}>
+                    <Input value={form.title} onChange={(event) => setConfigurationField("title", event.target.value)} placeholder="Крутите колесо и забирайте приз" />
                   </FieldBlock>
-                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                    <FieldBlock label="Начало *" error={fieldErrors.active_from}><Input type="datetime-local" value={form.active_from} onChange={(event) => setCampaignField("active_from", event.target.value)} /></FieldBlock>
-                    <FieldBlock label="Окончание *" error={fieldErrors.active_to}><Input type="datetime-local" value={form.active_to} onChange={(event) => { setCampaignField("active_to", event.target.value); setCampaignField("claim_until", addDaysToDateTime(event.target.value, 7)) }} /></FieldBlock>
-                    <FieldBlock label="Получить приз до *" hint="По умолчанию: окончание + 7 дней" error={fieldErrors.claim_until}><Input type="datetime-local" value={form.claim_until} onChange={(event) => setCampaignField("claim_until", event.target.value)} /></FieldBlock>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                    <FieldBlock label="Бесплатных вращений"><Input value="5" readOnly /></FieldBlock>
-                    <SelectField label="Аудитория" value={form.audience} options={[{ value: "all_authorized", label: "Все авторизованные" }, { value: "test_group", label: "Тестовая группа" }]} onChange={(value) => setCampaignField("audience", value as WheelCampaign["audience"])} />
-                    <FieldBlock label="Ссылка «Правила игры» *" error={fieldErrors.game_rules_url}><Input value={form.game_rules_url} onChange={(event) => setCampaignField("game_rules_url", event.target.value)} placeholder="/game-rules/prize-wheel" /></FieldBlock>
+                  <FieldBlock label="Описание *" error={fieldErrors.description}>
+                    <Textarea value={form.description} onChange={(event) => setConfigurationField("description", event.target.value)} rows={3} />
+                  </FieldBlock>
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+                    <FieldBlock label="Бесплатных вращений" hint="Один раз за всё время"><Input value="5" readOnly /></FieldBlock>
+                    <FieldBlock label="Срок получения приза" hint="С момента выигрыша"><Input value="7 дней" readOnly /></FieldBlock>
+                    <SelectField label="Аудитория" value={form.audience} options={[{ value: "all_authorized", label: "Все авторизованные" }, { value: "test_group", label: "Тестовая группа" }]} onChange={(value) => setConfigurationField("audience", value as WheelConfiguration["audience"])} />
+                    <FieldBlock label="Ссылка «Правила игры» *" error={fieldErrors.game_rules_url}><Input value={form.game_rules_url} onChange={(event) => setConfigurationField("game_rules_url", event.target.value)} placeholder="/game-rules/prize-wheel" /></FieldBlock>
                   </div>
                   <FieldBlock label="Каналы *" error={fieldErrors.channels}>
                     <div className="flex flex-wrap gap-5 rounded-md border p-3">
                       {(Object.keys(WHEEL_CHANNEL_LABELS) as WheelChannel[]).map((channel) => (
                         <Field key={channel} orientation="horizontal" className="w-auto">
-                          <Checkbox checked={form.channels.includes(channel)} onCheckedChange={(checked) => setCampaignField("channels", checked === true ? [...new Set([...form.channels, channel])] : form.channels.filter((item) => item !== channel))} />
+                          <Checkbox checked={form.channels.includes(channel)} onCheckedChange={(checked) => setConfigurationField("channels", checked === true ? [...new Set([...form.channels, channel])] : form.channels.filter((item) => item !== channel))} />
                           <FieldLabel>{WHEEL_CHANNEL_LABELS[channel]}</FieldLabel>
                         </Field>
                       ))}
@@ -941,8 +678,7 @@ export function PrizeWheelSection({ globalSearch, createSignal }: PrizeWheelSect
           </div>
 
           <div className="sticky bottom-0 z-10 flex flex-col gap-2 border-t bg-background/95 py-4 backdrop-blur sm:flex-row sm:justify-end">
-            <Button variant="outline" onClick={() => setViewMode("list")}>Отмена</Button>
-            <Button variant="secondary" onClick={() => save(false)}><Settings2 aria-hidden="true" />Сохранить черновик</Button>
+            <Button variant="secondary" onClick={() => save(false)}><Settings2 aria-hidden="true" />Сохранить настройки</Button>
             <Button onClick={() => save(true)}><RotateCcw aria-hidden="true" />Опубликовать версию</Button>
           </div>
         </div>

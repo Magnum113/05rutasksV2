@@ -254,7 +254,6 @@ function App() {
   const [promoCreateSignal, setPromoCreateSignal] = useState(0)
   const [discountCreateSignal, setDiscountCreateSignal] = useState(0)
   const [personalCreateSignal, setPersonalCreateSignal] = useState(0)
-  const [wheelCreateSignal, setWheelCreateSignal] = useState(0)
 
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
 
@@ -445,11 +444,6 @@ function App() {
   function beginCreatePersonal() {
     setScreen("personal")
     setPersonalCreateSignal((prev) => prev + 1)
-  }
-
-  function beginCreateWheel() {
-    setScreen("wheel")
-    setWheelCreateSignal((prev) => prev + 1)
   }
 
   function beginEditTask(task: Task) {
@@ -798,9 +792,7 @@ function App() {
         ? "+ Новая скидка"
         : screen === "personal"
           ? "+ Новый шаблон"
-          : screen === "wheel"
-            ? "+ Новый запуск"
-            : "+ Новое задание"
+          : "+ Новое задание"
   const globalSearchPlaceholder =
     screen === "promo"
       ? "код промокода, связанная скидка"
@@ -809,7 +801,7 @@ function App() {
         : screen === "personal"
           ? "название шаблона, key, код, телефон"
           : screen === "wheel"
-            ? "название запуска, spin_id, пользователь, приз"
+            ? "spin_id, пользователь, приз"
             : "task_code, заголовок"
   const onTopActionClick =
     screen === "promo"
@@ -818,9 +810,7 @@ function App() {
         ? beginCreateDiscount
         : screen === "personal"
           ? beginCreatePersonal
-          : screen === "wheel"
-            ? beginCreateWheel
-            : beginCreateTask
+          : beginCreateTask
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -899,7 +889,7 @@ function App() {
                 />
               </Field>
 
-              <Button onClick={onTopActionClick}>{topActionLabel}</Button>
+              {screen !== "wheel" ? <Button onClick={onTopActionClick}>{topActionLabel}</Button> : null}
             </div>
           </div>
 
@@ -1143,7 +1133,7 @@ function App() {
               ) : null}
 
               {screen === "wheel" ? (
-                <PrizeWheelSection globalSearch={globalSearch} createSignal={wheelCreateSignal} />
+                <PrizeWheelSection globalSearch={globalSearch} />
               ) : null}
 
               {screen === "editor" ? (
