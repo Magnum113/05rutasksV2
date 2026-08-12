@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { PromoCodesSection } from "@/components/PromoCodesSection"
 import { PersonalPromoSection } from "@/components/PersonalPromoSection"
+import { PrizeWheelSection } from "@/components/PrizeWheelSection"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   AlertDialog,
@@ -53,7 +54,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
-type Screen = "tasks" | "editor" | "discounts" | "promo" | "personal"
+type Screen = "tasks" | "editor" | "discounts" | "promo" | "personal" | "wheel"
 type RewardFilter = "all" | RewardType
 type TypeFilter = "all" | TaskType
 type StatusFilter = "all" | TaskStatus
@@ -253,6 +254,7 @@ function App() {
   const [promoCreateSignal, setPromoCreateSignal] = useState(0)
   const [discountCreateSignal, setDiscountCreateSignal] = useState(0)
   const [personalCreateSignal, setPersonalCreateSignal] = useState(0)
+  const [wheelCreateSignal, setWheelCreateSignal] = useState(0)
 
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
 
@@ -443,6 +445,11 @@ function App() {
   function beginCreatePersonal() {
     setScreen("personal")
     setPersonalCreateSignal((prev) => prev + 1)
+  }
+
+  function beginCreateWheel() {
+    setScreen("wheel")
+    setWheelCreateSignal((prev) => prev + 1)
   }
 
   function beginEditTask(task: Task) {
@@ -791,7 +798,9 @@ function App() {
         ? "+ Новая скидка"
         : screen === "personal"
           ? "+ Новый шаблон"
-          : "+ Новое задание"
+          : screen === "wheel"
+            ? "+ Новый запуск"
+            : "+ Новое задание"
   const globalSearchPlaceholder =
     screen === "promo"
       ? "код промокода, связанная скидка"
@@ -799,7 +808,9 @@ function App() {
         ? "название скидки, продавец, ограничения"
         : screen === "personal"
           ? "название шаблона, key, код, телефон"
-          : "task_code, заголовок"
+          : screen === "wheel"
+            ? "название запуска, spin_id, пользователь, приз"
+            : "task_code, заголовок"
   const onTopActionClick =
     screen === "promo"
       ? beginCreatePromo
@@ -807,7 +818,9 @@ function App() {
         ? beginCreateDiscount
         : screen === "personal"
           ? beginCreatePersonal
-          : beginCreateTask
+          : screen === "wheel"
+            ? beginCreateWheel
+            : beginCreateTask
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -817,7 +830,7 @@ function App() {
             <div className="flex flex-col gap-2">
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#E30614]">05.RU</p>
               <h1 className="text-2xl font-semibold">Админка маркетинга</h1>
-              <p className="text-sm text-muted-foreground">Интерфейс для управления заданиями, скидками и промокодами.</p>
+              <p className="text-sm text-muted-foreground">Интерфейс для управления заданиями, промокодами и игровыми механиками.</p>
             </div>
 
             <nav className="flex flex-col gap-2">
@@ -861,6 +874,13 @@ function App() {
                 onClick={() => setScreen("personal")}
               >
                 Индивидуальные промокоды
+              </Button>
+              <Button
+                className="w-full justify-start"
+                variant={screen === "wheel" ? "default" : "secondary"}
+                onClick={() => setScreen("wheel")}
+              >
+                Колесо призов
               </Button>
             </nav>
           </div>
@@ -1120,6 +1140,10 @@ function App() {
                   createSignal={personalCreateSignal}
                   onCreateDiscount={beginCreateDiscount}
                 />
+              ) : null}
+
+              {screen === "wheel" ? (
+                <PrizeWheelSection globalSearch={globalSearch} createSignal={wheelCreateSignal} />
               ) : null}
 
               {screen === "editor" ? (
