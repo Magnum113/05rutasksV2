@@ -266,7 +266,6 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
 
         <main className="pw-main">
           <div className="pw-intro">
-            <span className="pw-eyebrow">MVP · 5 гарантированных подарков</span>
             <h1>Крутите ленту — каждый раз выигрывайте приз</h1>
             <p>Вам доступно пять бесплатных вращений. В ленте нет пустых секторов.</p>
           </div>

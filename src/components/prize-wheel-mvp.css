@@ -177,20 +177,8 @@
   text-align: center;
 }
 
-.pw-eyebrow {
-  display: inline-flex;
-  padding: 7px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 999px;
-  background: rgba(119, 20, 0, 0.12);
-  font-size: 11px;
-  font-weight: 850;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
 .pw-intro h1 {
-  margin: 12px 0 4px;
+  margin: 0 0 4px;
   font-size: clamp(27px, 3vw, 44px);
   font-weight: 950;
   letter-spacing: -0.04em;
@@ -770,10 +758,6 @@
 
   .pw-intro p {
     font-size: 13px;
-  }
-
-  .pw-eyebrow {
-    font-size: 9px;
   }
 
   .pw-selector {
