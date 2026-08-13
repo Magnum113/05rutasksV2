@@ -250,7 +250,9 @@ function App() {
 
   const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS)
 
-  const [screen, setScreen] = useState<Screen>("tasks")
+  const [screen, setScreen] = useState<Screen>(() =>
+    new URLSearchParams(window.location.search).get("screen") === "wheel-mvp" ? "wheelPrototype" : "tasks",
+  )
   const [globalSearch, setGlobalSearch] = useState("")
   const [promoCreateSignal, setPromoCreateSignal] = useState(0)
   const [discountCreateSignal, setDiscountCreateSignal] = useState(0)
@@ -445,6 +447,16 @@ function App() {
   function beginCreatePersonal() {
     setScreen("personal")
     setPersonalCreateSignal((prev) => prev + 1)
+  }
+
+  function openWheelPrototype() {
+    window.history.replaceState(null, "", `${window.location.pathname}?screen=wheel-mvp`)
+    setScreen("wheelPrototype")
+  }
+
+  function closeWheelPrototype() {
+    window.history.replaceState(null, "", window.location.pathname)
+    setScreen("wheel")
   }
 
   function beginEditTask(task: Task) {
@@ -814,7 +826,7 @@ function App() {
           : beginCreateTask
 
   if (screen === "wheelPrototype") {
-    return <PrizeWheelMvpPrototype onBack={() => setScreen("wheel")} />
+    return <PrizeWheelMvpPrototype onBack={closeWheelPrototype} />
   }
 
   return (
@@ -880,7 +892,7 @@ function App() {
               <Button
                 className="w-full justify-start"
                 variant="outline"
-                onClick={() => setScreen("wheelPrototype")}
+                onClick={openWheelPrototype}
               >
                 MVP-прототип колеса
               </Button>
