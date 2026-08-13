@@ -1,84 +1,69 @@
-# Design QA — MVP-прототип «Колесо призов»
+# Design QA — MVP-прототип «Колесо призов» в палитре 05.RU
 
-**Artifacts**
+**Артефакты**
 
-- Source visual truth: `/var/folders/6m/dl3gj2gx6pn7c_9fqs1k4lsr0000gn/T/codex-clipboard-2fb69a8a-5e50-4b11-890d-a62555062ff7.png`
-- Browser-rendered implementation: `/tmp/pw-mvp/pw-desktop-final.png`
-- Side-by-side comparison: `/tmp/pw-mvp/pw-side-by-side-final.png`
-- Mobile implementation: `/tmp/pw-mvp/pw-mobile-final.png`
-- Result state: `/tmp/pw-mvp/pw-result-final.png`
-- Claimed personal promo state: `/tmp/pw-mvp/pw-claimed-final.png`
-- Local implementation URL: `http://127.0.0.1:5174/`
+- Цветовой референс 05.RU: `/var/folders/6m/dl3gj2gx6pn7c_9fqs1k4lsr0000gn/T/codex-clipboard-cd6c8ba2-9a66-439d-b7c8-52251454e332.png`
+- Реализация в размере референса: `/tmp/pw-mvp/pw-brand-reference-size.png`
+- Сравнение рядом: `/tmp/pw-mvp/pw-brand-side-by-side.png`
+- Полный desktop-экран: `/tmp/pw-mvp/pw-brand-desktop.png`
+- Mobile-экран: `/tmp/pw-mvp/pw-brand-mobile.png`
+- Попап призов: `/tmp/pw-mvp/pw-brand-prizes.png`
+- Полученный промокод: `/tmp/pw-mvp/pw-brand-code.png`
+- Полученные бонусы: `/tmp/pw-mvp/pw-brand-bonus-claimed.png`
+- Локальный URL: `http://127.0.0.1:5174/?screen=wheel-mvp`
 
-**Normalization**
+**Нормализация сравнения**
 
-- Source pixels: `2312 × 1164`.
-- Implementation pixels: `2312 × 1164`.
-- Browser CSS viewport: `2312 × 1164`, desktop, light theme.
-- Device scale factor: `1`.
-- Density normalization: none; source and implementation were compared at identical pixel dimensions and crop.
-- State: initial MVP state with 5 free spins and no pending prize.
+- Референс: `2878 × 864` px.
+- Реализация для сравнения: viewport и screenshot `2878 × 864` px, desktop, light theme, device scale factor `1`.
+- Референс используется как источник цветовой системы, а не как макет экрана колеса. Композиция ранее согласованного прототипа сохранена.
+- Для проверки полного сценария дополнительно использован viewport `1600 × 900` px; для адаптива — `390 × 844` px.
 
-**Full-view comparison evidence**
+**Что приведено к 05.RU**
 
-- The source and final implementation were placed in the same comparison image: `/tmp/pw-mvp/pw-side-by-side-final.png`.
-- The final implementation preserves the source composition: rounded orange game canvas, counter and game navigation at the top, large prize objects arranged as a horizontal reel, black primary action at the bottom, and compact legal copy.
-- Product-specific MVP changes are intentional: the source coin price is replaced with 5 free spins, activity points are absent, and 05.RU bonus/promo rewards replace partner products.
+- Основной фон стал белым, игровая область — светло-серой, основной текст — почти чёрным.
+- Главные действия, навигация «Призы», указатель ленты и интерфейсные акценты переведены в фирменный красный.
+- Бонусные награды отделены фирменным жёлтым: изображения, подписи в ленте, строки в попапе и сообщение об успешном начислении.
+- Промокоды сохранены красными, чтобы визуально отличаться от бонусных наград.
+- Логотип в прототипе отображается как чёрное `05` и красное `RU`.
 
-**Focused region comparison evidence**
+**История проверки**
 
-- A separate crop was not required because the original-resolution full-view comparison keeps the header, prize labels, primary CTA, and legal copy readable.
-- The result and claim interaction were checked separately in `/tmp/pw-mvp/pw-result-final.png` and `/tmp/pw-mvp/pw-claimed-final.png`.
+1. Первый проход — найдены три расхождения.
+   - Старый оранжевый фон и чёрная CTA не соответствовали актуальному интерфейсу 05.RU.
+   - Бонусные призы были красными и смешивались с промокодами.
+   - CSS-переменные не наследовались в portal-попапах, из-за чего одна CTA теряла красный фон.
+2. Исправления.
+   - Введена единая палитра: красный `#e30613`, жёлтый `#ffe500`, чёрный `#101820`, белый и нейтральные серые поверхности.
+   - Два бонусных ассета пересозданы в жёлто-золотой гамме с прозрачным фоном.
+   - Состояния призов получают класс по типу награды; бонусные состояния окрашиваются независимо от промокодов.
+   - Цветовые переменные добавлены также на portal-контейнеры диалогов.
+3. Финальный проход.
+   - Desktop, mobile, список призов, промокод и бонусная награда проверены визуально.
+   - Горизонтального переполнения на mobile нет.
+   - WCAG 2.0 A/AA: `0` нарушений.
+   - Ошибок приложения и консоли нет.
 
-**Comparison history**
+**Проверенные взаимодействия**
 
-1. First pass — blocked by two P2 differences.
-   - Prize assets and CTA were too small at the `2312 × 1164` source viewport, which changed the hierarchy and made the reel feel sparse.
-   - The reel marker could land between cards because card width was measured after CSS scaling.
-   - The flat red-orange background drifted from the warmer source palette.
-2. Fixes made.
-   - Increased desktop prize/card scale and primary CTA size.
-   - Centered the target card using its layout width (`offsetWidth`) rather than transformed bounds.
-   - Matched the source with a warm orange vertical gradient and source-like outer margins/radius.
-3. Post-fix evidence.
-   - Desktop: `/tmp/pw-mvp/pw-desktop-final.png`.
-   - Mobile: `/tmp/pw-mvp/pw-mobile-final.png`.
-   - Final side-by-side: `/tmp/pw-mvp/pw-side-by-side-final.png`.
-
-**Required fidelity surfaces**
-
-- Fonts and typography: condensed italic treatment is retained for the CTA; app copy uses the existing system stack with clear hierarchy and no clipping.
-- Spacing and layout rhythm: source-like canvas inset, rounded container, large centered prize, horizontal reel, and bottom CTA are preserved; desktop and mobile layouts do not overflow horizontally.
-- Colors and tokens: warm orange source palette, white navigation, red 05.RU accent, and black CTA are aligned with the reference and existing admin styling.
-- Image quality and asset fidelity: all four prize assets are generated raster assets with transparent backgrounds, consistent 3D lighting, clean crops, and optimized WebP delivery; no emoji, placeholder boxes, inline SVG art, or CSS illustrations are used.
-- Copy and content: copy accurately describes the approved MVP — 5 free guaranteed spins, bonuses and promo codes only, no activity points, and a 7-day claim window.
-
-**Findings**
-
-- No actionable P0/P1/P2 fidelity or usability issues remain.
-- Automated WCAG scan reported `0` violations. Its color-contrast rule left one incomplete check because the canvas uses a gradient; this is recorded as a residual automated-test limitation rather than a visual defect.
-
-**Primary interactions tested**
-
-- Open the prototype from the admin sidebar and return to the admin.
-- Open «Призы», «Мои призы», and «Правила игры».
-- Start a spin, wait for the reel to stop, and receive a guaranteed result.
-- Claim an individual promo code, copy it, and continue.
-- Claim a bonus prize and continue.
-- Preserve an unclaimed prize as pending and block the next spin until claim.
-- Reset the demo.
-- Console and browser errors checked: no application errors.
+- Открытие попапа «Призы» и обоих табов.
+- Бесплатное вращение и остановка ленты на гарантированном призе.
+- Получение и копирование промокода.
+- Получение бонусов.
+- Сохранение незабранного приза и блокировка следующего вращения до получения.
+- Сброс демо-состояния.
 
 **Implementation Checklist**
 
-- [x] Source composition matched at the source viewport.
-- [x] Desktop and mobile layouts verified.
-- [x] Core MVP interaction path verified.
-- [x] TypeScript and production build verified.
-- [x] Browser console and accessibility scan checked.
+- [x] Цветовая система соответствует предоставленному референсу 05.RU.
+- [x] Бонусы выделены жёлтым, основные действия — красным.
+- [x] Desktop и mobile проверены визуально.
+- [x] Основной MVP-сценарий проверен в браузере.
+- [x] TypeScript и production build проверены.
+- [x] Accessibility, console и browser errors проверены.
 
 **Follow-up Polish**
 
-- No blocking follow-up polish is required for the prototype handoff.
+- Блокирующих замечаний для передачи прототипа нет.
 
 final result: passed

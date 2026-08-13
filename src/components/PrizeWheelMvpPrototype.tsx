@@ -267,7 +267,7 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
               >
                 {REEL_ITEMS.map((prize, index) => (
                   <article
-                    className={`pw-reel-card${index === reelIndex ? " pw-reel-card--selected" : ""}`}
+                    className={`pw-reel-card pw-reel-card--${prize.kind}${index === reelIndex ? " pw-reel-card--selected" : ""}`}
                     key={`${prize.id}-${index}`}
                     ref={index === 0 ? reelFirstCardRef : undefined}
                     aria-hidden={index < 4 || index > 19}
@@ -324,7 +324,7 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
                 <DialogDescription>{selectedPrize.description}</DialogDescription>
               </DialogHeader>
 
-              <div className="pw-result-image">
+              <div className={`pw-result-image pw-result-image--${selectedPrize.kind}`}>
                 <img src={selectedPrize.image} alt={selectedPrize.title} />
               </div>
 
@@ -398,7 +398,7 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
               {prizeTab === "available" ? (
                 <div className="pw-prize-list" role="tabpanel">
                   {PRIZES.map((prize) => (
-                    <div key={prize.id}>
+                    <div key={prize.id} className={`pw-prize-row pw-prize-row--${prize.kind}`}>
                       <img src={prize.image} alt="" />
                       <span>
                         <strong>{prize.title}</strong>
@@ -411,7 +411,7 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
                 <div className="pw-win-list" role="tabpanel">
                   {wonPrizes.map((item) => (
                     item.claimed ? (
-                      <div key={item.claimId}>
+                      <div key={item.claimId} className={`pw-prize-row pw-prize-row--${item.prize.kind}`}>
                         <img src={item.prize.image} alt="" />
                         <span><strong>{item.prize.title}</strong><small>Получен</small></span>
                         <Check aria-label="Получен" />
@@ -420,6 +420,7 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
                       <button
                         type="button"
                         key={item.claimId}
+                        className={`pw-prize-row pw-prize-row--${item.prize.kind}`}
                         onClick={() => {
                           setSelectedPrize(item.prize)
                           setSelectedClaimId(item.claimId)
