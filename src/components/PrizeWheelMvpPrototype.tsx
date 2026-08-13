@@ -36,6 +36,7 @@ interface Prize {
 interface WonPrize {
   claimId: string
   prize: Prize
+  claimed: boolean
 }
 
 const PRIZES: Prize[] = [
@@ -96,6 +97,7 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
   const [instantMove, setInstantMove] = useState(true)
   const [isSpinning, setIsSpinning] = useState(false)
   const [selectedPrize, setSelectedPrize] = useState<Prize | null>(null)
+  const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null)
   const [resultOpen, setResultOpen] = useState(false)
   const [resultClaimed, setResultClaimed] = useState(false)
   const [infoPanel, setInfoPanel] = useState<InfoPanel>(null)
@@ -103,9 +105,9 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
   const [wonPrizes, setWonPrizes] = useState<WonPrize[]>([])
   const [copied, setCopied] = useState(false)
 
-  const hasPendingPrize = Boolean(selectedPrize && !resultClaimed)
+  const pendingPrizeCount = wonPrizes.filter((item) => !item.claimed).length
   const spinsUsed = 5 - spinsLeft
-  const userPrizesCount = wonPrizes.length + (hasPendingPrize ? 1 : 0)
+  const userPrizesCount = wonPrizes.length
 
   useLayoutEffect(() => {
     const updateTrackPosition = () => {
@@ -136,11 +138,6 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
   function beginSpin() {
     if (isSpinning) return
 
-    if (hasPendingPrize) {
-      setResultOpen(true)
-      return
-    }
-
     if (spinsLeft <= 0) return
 
     const prizeIndex = WIN_SEQUENCE[spinsUsed % WIN_SEQUENCE.length]
@@ -164,7 +161,10 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
 
     if (spinTimeoutRef.current) window.clearTimeout(spinTimeoutRef.current)
     spinTimeoutRef.current = window.setTimeout(() => {
+      const claimId = `${winner.id}-${Date.now()}`
       setSelectedPrize(winner)
+      setSelectedClaimId(claimId)
+      setWonPrizes((items) => [{ claimId, prize: winner, claimed: false }, ...items])
       setSpinsLeft((value) => Math.max(0, value - 1))
       setIsSpinning(false)
       setResultOpen(true)
@@ -173,18 +173,18 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
   }
 
   function claimPrize() {
-    if (!selectedPrize || resultClaimed) return
+    if (!selectedPrize || !selectedClaimId || resultClaimed) return
 
-    setWonPrizes((items) => [
-      { claimId: `${selectedPrize.id}-${Date.now()}`, prize: selectedPrize },
-      ...items,
-    ])
+    setWonPrizes((items) => items.map((item) => (
+      item.claimId === selectedClaimId ? { ...item, claimed: true } : item
+    )))
     setResultClaimed(true)
   }
 
   function continueAfterClaim() {
     setResultOpen(false)
     setSelectedPrize(null)
+    setSelectedClaimId(null)
     setResultClaimed(false)
     setCopied(false)
   }
@@ -206,6 +206,7 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
     setInstantMove(true)
     setIsSpinning(false)
     setSelectedPrize(null)
+    setSelectedClaimId(null)
     setResultOpen(false)
     setResultClaimed(false)
     setInfoPanel(null)
@@ -216,11 +217,9 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
 
   const primaryButtonLabel = isSpinning
     ? "Лента крутится"
-    : hasPendingPrize
-      ? "Забрать приз"
-      : spinsLeft > 0
-        ? "Крутить бесплатно"
-        : "Вращения закончились"
+    : spinsLeft > 0
+      ? "Крутить бесплатно"
+      : "Вращения закончились"
 
   return (
     <div className="pw-page">
@@ -284,16 +283,16 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
           </section>
 
           <div className="pw-action-zone">
-            {hasPendingPrize ? (
+            {pendingPrizeCount > 0 ? (
               <p className="pw-pending-note">
-                <Sparkles aria-hidden="true" /> У вас есть незабранный приз
+                <Sparkles aria-hidden="true" /> Незабранных призов: {pendingPrizeCount}
               </p>
             ) : null}
             <button
               className="pw-spin-button"
               type="button"
               onClick={beginSpin}
-              disabled={isSpinning || (spinsLeft === 0 && !hasPendingPrize)}
+              disabled={isSpinning || spinsLeft === 0}
             >
               {isSpinning ? <LoaderCircle className="pw-spinner" aria-hidden="true" /> : <Gift aria-hidden="true" />}
               <span>{primaryButtonLabel}</span>
@@ -350,7 +349,7 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
               ) : null}
 
               {!resultClaimed ? (
-                <p className="pw-claim-note">Заберите приз в течение 7 дней. До получения нового приза вращение недоступно.</p>
+                <p className="pw-claim-note">Заберите приз в течение 7 дней. Можно продолжить вращения и вернуться за ним позже.</p>
               ) : null}
 
               <button
@@ -410,21 +409,32 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
                 </div>
               ) : (
                 <div className="pw-win-list" role="tabpanel">
-                  {hasPendingPrize && selectedPrize ? (
-                    <button type="button" onClick={() => { setInfoPanel(null); setResultOpen(true) }}>
-                      <img src={selectedPrize.image} alt="" />
-                      <span><strong>{selectedPrize.title}</strong><small>Ожидает получения</small></span>
-                      <b>Забрать</b>
-                    </button>
-                  ) : null}
                   {wonPrizes.map((item) => (
-                    <div key={item.claimId}>
-                      <img src={item.prize.image} alt="" />
-                      <span><strong>{item.prize.title}</strong><small>Получен</small></span>
-                      <Check aria-label="Получен" />
-                    </div>
+                    item.claimed ? (
+                      <div key={item.claimId}>
+                        <img src={item.prize.image} alt="" />
+                        <span><strong>{item.prize.title}</strong><small>Получен</small></span>
+                        <Check aria-label="Получен" />
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        key={item.claimId}
+                        onClick={() => {
+                          setSelectedPrize(item.prize)
+                          setSelectedClaimId(item.claimId)
+                          setResultClaimed(false)
+                          setInfoPanel(null)
+                          setResultOpen(true)
+                        }}
+                      >
+                        <img src={item.prize.image} alt="" />
+                        <span><strong>{item.prize.title}</strong><small>Ожидает получения</small></span>
+                        <b>Забрать</b>
+                      </button>
+                    )
                   ))}
-                  {!hasPendingPrize && wonPrizes.length === 0 ? (
+                  {wonPrizes.length === 0 ? (
                     <div className="pw-empty-state">
                       <Gift aria-hidden="true" />
                       <strong>Здесь появятся ваши призы</strong>
@@ -440,7 +450,7 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
             <div className="pw-rules">
               <p>Каждому авторизованному пользователю один раз доступны 5 бесплатных вращений.</p>
               <p>Каждое вращение гарантированно определяет один активный приз. Один и тот же приз может выпасть несколько раз.</p>
-              <p>Выигранный приз нужно получить кнопкой «Забрать приз» в течение 7 дней. До получения нового приза следующее вращение недоступно.</p>
+              <p>Выигранный приз нужно получить кнопкой «Забрать приз» в течение 7 дней. Незабранные призы сохраняются во вкладке «Вы выиграли» и не ограничивают следующие вращения.</p>
               <p>В MVP призами являются бонусы и промокоды. Вероятности выпадения пользователю не показываются.</p>
             </div>
           ) : null}
