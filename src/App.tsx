@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button"
 import { PromoCodesSection } from "@/components/PromoCodesSection"
 import { PersonalPromoSection } from "@/components/PersonalPromoSection"
 import { PrizeWheelSection } from "@/components/PrizeWheelSection"
+import { PrizeWheelMvpPrototype } from "@/components/PrizeWheelMvpPrototype"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   AlertDialog,
@@ -54,7 +55,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
-type Screen = "tasks" | "editor" | "discounts" | "promo" | "personal" | "wheel"
+type Screen = "tasks" | "editor" | "discounts" | "promo" | "personal" | "wheel" | "wheelPrototype"
 type RewardFilter = "all" | RewardType
 type TypeFilter = "all" | TaskType
 type StatusFilter = "all" | TaskStatus
@@ -812,6 +813,10 @@ function App() {
           ? beginCreatePersonal
           : beginCreateTask
 
+  if (screen === "wheelPrototype") {
+    return <PrizeWheelMvpPrototype onBack={() => setScreen("wheel")} />
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="flex min-h-screen flex-col lg:flex-row">
@@ -871,6 +876,13 @@ function App() {
                 onClick={() => setScreen("wheel")}
               >
                 Колесо призов
+              </Button>
+              <Button
+                className="w-full justify-start"
+                variant="outline"
+                onClick={() => setScreen("wheelPrototype")}
+              >
+                MVP-прототип колеса
               </Button>
             </nav>
           </div>
