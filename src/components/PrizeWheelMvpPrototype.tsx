@@ -1,15 +1,13 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import {
   ArrowLeft,
   Check,
   ChevronDown,
   Clipboard,
   Gift,
-  History,
   LoaderCircle,
   RotateCcw,
   Sparkles,
-  TicketPercent,
 } from "lucide-react"
 
 import {
@@ -22,7 +20,8 @@ import {
 import "@/components/prize-wheel-mvp.css"
 
 type PrizeKind = "bonus" | "promo"
-type InfoPanel = "prizes" | "wins" | "rules" | null
+type InfoPanel = "prizes" | "rules" | null
+type PrizeTab = "available" | "won"
 
 interface Prize {
   id: string
@@ -100,18 +99,13 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
   const [resultOpen, setResultOpen] = useState(false)
   const [resultClaimed, setResultClaimed] = useState(false)
   const [infoPanel, setInfoPanel] = useState<InfoPanel>(null)
+  const [prizeTab, setPrizeTab] = useState<PrizeTab>("available")
   const [wonPrizes, setWonPrizes] = useState<WonPrize[]>([])
   const [copied, setCopied] = useState(false)
 
   const hasPendingPrize = Boolean(selectedPrize && !resultClaimed)
   const spinsUsed = 5 - spinsLeft
-
-  const activePanelTitle = useMemo(() => {
-    if (infoPanel === "prizes") return "Призы в ленте"
-    if (infoPanel === "wins") return "Мои призы"
-    if (infoPanel === "rules") return "Правила игры"
-    return ""
-  }, [infoPanel])
+  const userPrizesCount = wonPrizes.length + (hasPendingPrize ? 1 : 0)
 
   useLayoutEffect(() => {
     const updateTrackPosition = () => {
@@ -215,6 +209,7 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
     setResultOpen(false)
     setResultClaimed(false)
     setInfoPanel(null)
+    setPrizeTab("available")
     setWonPrizes([])
     setCopied(false)
   }
@@ -248,18 +243,10 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
           </div>
 
           <nav className="pw-nav" aria-label="Разделы колеса призов">
-            <button type="button" onClick={() => setInfoPanel("prizes")}>
+            <button type="button" onClick={() => { setPrizeTab("available"); setInfoPanel("prizes") }}>
               <Gift aria-hidden="true" />
               <span>Призы</span>
-            </button>
-            <button type="button" onClick={() => setInfoPanel("wins")}>
-              <History aria-hidden="true" />
-              <span>Мои призы</span>
-              {wonPrizes.length > 0 ? <b>{wonPrizes.length}</b> : null}
-            </button>
-            <button type="button" onClick={() => setInfoPanel("rules")}>
-              <TicketPercent aria-hidden="true" />
-              <span>Правила игры</span>
+              {userPrizesCount > 0 ? <b>{userPrizesCount}</b> : null}
             </button>
           </nav>
         </header>
@@ -381,48 +368,72 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
       <Dialog open={Boolean(infoPanel)} onOpenChange={(open) => !open && setInfoPanel(null)}>
         <DialogContent className="pw-info-dialog">
           <DialogHeader>
-            <DialogTitle>{activePanelTitle}</DialogTitle>
+            <DialogTitle>{infoPanel === "prizes" ? "Призы" : "Правила игры"}</DialogTitle>
             <DialogDescription className="sr-only">Информация о механике колеса призов</DialogDescription>
           </DialogHeader>
 
           {infoPanel === "prizes" ? (
-            <div className="pw-prize-list">
-              {PRIZES.map((prize) => (
-                <div key={prize.id}>
-                  <img src={prize.image} alt="" />
-                  <span>
-                    <strong>{prize.title}</strong>
-                    <small>{prize.kind === "bonus" ? "Бонусы" : "Индивидуальный промокод"}</small>
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          {infoPanel === "wins" ? (
-            <div className="pw-win-list">
-              {hasPendingPrize && selectedPrize ? (
-                <button type="button" onClick={() => { setInfoPanel(null); setResultOpen(true) }}>
-                  <img src={selectedPrize.image} alt="" />
-                  <span><strong>{selectedPrize.title}</strong><small>Ожидает получения</small></span>
-                  <b>Забрать</b>
+            <>
+              <div className="pw-prize-tabs" role="tablist" aria-label="Категории призов">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={prizeTab === "available"}
+                  className={prizeTab === "available" ? "pw-prize-tab--active" : ""}
+                  onClick={() => setPrizeTab("available")}
+                >
+                  Можно выиграть
                 </button>
-              ) : null}
-              {wonPrizes.map((item) => (
-                <div key={item.claimId}>
-                  <img src={item.prize.image} alt="" />
-                  <span><strong>{item.prize.title}</strong><small>Получен</small></span>
-                  <Check aria-label="Получен" />
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={prizeTab === "won"}
+                  className={prizeTab === "won" ? "pw-prize-tab--active" : ""}
+                  onClick={() => setPrizeTab("won")}
+                >
+                  Вы выиграли
+                  {userPrizesCount > 0 ? <b>{userPrizesCount}</b> : null}
+                </button>
+              </div>
+
+              {prizeTab === "available" ? (
+                <div className="pw-prize-list" role="tabpanel">
+                  {PRIZES.map((prize) => (
+                    <div key={prize.id}>
+                      <img src={prize.image} alt="" />
+                      <span>
+                        <strong>{prize.title}</strong>
+                        <small>{prize.kind === "bonus" ? "Бонусы" : "Индивидуальный промокод"}</small>
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-              {!hasPendingPrize && wonPrizes.length === 0 ? (
-                <div className="pw-empty-state">
-                  <Gift aria-hidden="true" />
-                  <strong>Здесь появятся ваши призы</strong>
-                  <span>Крутите ленту — каждый раз в ней есть подарок.</span>
+              ) : (
+                <div className="pw-win-list" role="tabpanel">
+                  {hasPendingPrize && selectedPrize ? (
+                    <button type="button" onClick={() => { setInfoPanel(null); setResultOpen(true) }}>
+                      <img src={selectedPrize.image} alt="" />
+                      <span><strong>{selectedPrize.title}</strong><small>Ожидает получения</small></span>
+                      <b>Забрать</b>
+                    </button>
+                  ) : null}
+                  {wonPrizes.map((item) => (
+                    <div key={item.claimId}>
+                      <img src={item.prize.image} alt="" />
+                      <span><strong>{item.prize.title}</strong><small>Получен</small></span>
+                      <Check aria-label="Получен" />
+                    </div>
+                  ))}
+                  {!hasPendingPrize && wonPrizes.length === 0 ? (
+                    <div className="pw-empty-state">
+                      <Gift aria-hidden="true" />
+                      <strong>Здесь появятся ваши призы</strong>
+                      <span>Крутите ленту — каждый раз в ней есть подарок.</span>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
+              )}
+            </>
           ) : null}
 
           {infoPanel === "rules" ? (
