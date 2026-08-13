@@ -146,7 +146,7 @@ function FieldBlock(props: { label: string; hint?: string; error?: string; class
 function SelectField(props: {
   label: string
   value: string
-  options: Array<{ value: string; label: string }>
+  options: Array<{ value: string; label: string; disabled?: boolean }>
   onChange: (value: string) => void
   hint?: string
 }) {
@@ -159,7 +159,7 @@ function SelectField(props: {
         </SelectTrigger>
         <SelectContent>
           {props.options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
+            <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
               {option.label}
             </SelectItem>
           ))}
@@ -327,6 +327,9 @@ export function PrizeWheelSection({ globalSearch }: PrizeWheelSectionProps) {
       }
 
       if (prize.reward_type === "activity_points") {
+        if (publish) {
+          addError(`${prefix}.reward_type`, `${label}: очки активности станут доступны только в Итерации 2`)
+        }
         if (!prize.points_amount || prize.points_amount <= 0) addError(`${prefix}.points_amount`, `${label}: количество очков должно быть больше 0`)
         if (!prize.points_ttl_days || !Number.isInteger(prize.points_ttl_days) || prize.points_ttl_days <= 0) {
           addError(`${prefix}.points_ttl_days`, `${label}: срок жизни очков в днях обязателен`)
@@ -459,7 +462,12 @@ export function PrizeWheelSection({ globalSearch }: PrizeWheelSectionProps) {
               <SelectField
                 label="Тип награды"
                 value={spinFilters.rewardType}
-                options={[{ value: "all", label: "Все типы" }, ...Object.entries(WHEEL_REWARD_TYPE_LABELS).map(([value, label]) => ({ value, label }))]}
+                options={[
+                  { value: "all", label: "Все типы" },
+                  ...Object.entries(WHEEL_REWARD_TYPE_LABELS)
+                    .filter(([value]) => value !== "activity_points")
+                    .map(([value, label]) => ({ value, label })),
+                ]}
                 onChange={(value) => setSpinFilters((previous) => ({ ...previous, rewardType: value as SpinFilters["rewardType"] }))}
               />
               <SelectField
@@ -570,7 +578,7 @@ export function PrizeWheelSection({ globalSearch }: PrizeWheelSectionProps) {
                 <CardContent className="flex flex-col gap-3">
                   {fieldErrors.prizes ? <p className="text-sm font-medium text-destructive">{fieldErrors.prizes}</p> : null}
                   {form.prizes.length === 0 ? (
-                    <div className="rounded-lg border border-dashed p-8 text-center"><Gift className="mx-auto text-muted-foreground" aria-hidden="true" /><p className="mt-3 font-medium">Пока нет призов</p><p className="mt-1 text-sm text-muted-foreground">Добавьте бонусы, очки активности или промокод.</p></div>
+                    <div className="rounded-lg border border-dashed p-8 text-center"><Gift className="mx-auto text-muted-foreground" aria-hidden="true" /><p className="mt-3 font-medium">Пока нет призов</p><p className="mt-1 text-sm text-muted-foreground">В MVP добавьте бонусы или промокод.</p></div>
                   ) : (
                     <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                       {[...form.prizes].sort((a, b) => a.visual_order - b.visual_order).map((prize, index) => (
@@ -621,7 +629,17 @@ export function PrizeWheelSection({ globalSearch }: PrizeWheelSectionProps) {
                       <FieldBlock label="Показывать с *"><Input type="datetime-local" value={selectedPrize.display_from} onChange={(event) => setPrizeField(selectedPrize.id, "display_from", event.target.value)} /></FieldBlock>
                       <FieldBlock label="Показывать до *" error={fieldErrors[`prize.${selectedPrize.id}.display_to`]}><Input type="datetime-local" value={selectedPrize.display_to} onChange={(event) => setPrizeField(selectedPrize.id, "display_to", event.target.value)} /></FieldBlock>
                     </div>
-                    <SelectField label="Тип награды" value={selectedPrize.reward_type} options={Object.entries(WHEEL_REWARD_TYPE_LABELS).map(([value, label]) => ({ value, label }))} onChange={(value) => setPrizeRewardType(selectedPrize.id, value as WheelRewardType)} />
+                    <SelectField
+                      label="Тип награды"
+                      value={selectedPrize.reward_type}
+                      options={Object.entries(WHEEL_REWARD_TYPE_LABELS).map(([value, label]) => ({
+                        value,
+                        label: value === "activity_points" ? `${label} — Итерация 2` : label,
+                        disabled: value === "activity_points",
+                      }))}
+                      onChange={(value) => setPrizeRewardType(selectedPrize.id, value as WheelRewardType)}
+                      hint="В MVP доступны бонусы и промокоды. Очки активности добавляются в полной версии."
+                    />
 
                     {selectedPrize.reward_type === "bonus" ? (
                       <div className="grid grid-cols-1 gap-3 rounded-lg bg-muted p-4 lg:grid-cols-2">
@@ -672,7 +690,8 @@ export function PrizeWheelSection({ globalSearch }: PrizeWheelSectionProps) {
                 <p>Backend заранее фиксирует результат, после чего лента останавливается на выбранном призе.</p>
                 <p>До получения предыдущего приза следующее вращение заблокировано.</p>
                 <p>Запас закончился — приз исключается, остальные продолжают выпадать по своим весам.</p>
-                <p>В полноценной версии вращение за очки стоит 10 очков без дневного и общего лимита.</p>
+                <p>В MVP призами являются только бонусы и промокоды.</p>
+                <p>В Итерации 2 очки активности добавляются и как приз, и как оплата вращения.</p>
               </CardContent>
             </Card>
           </div>
