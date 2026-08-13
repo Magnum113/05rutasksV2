@@ -37,6 +37,7 @@ interface WonPrize {
   claimId: string
   prize: Prize
   claimed: boolean
+  promoCode?: string
 }
 
 const PRIZES: Prize[] = [
@@ -98,6 +99,7 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
   const [isSpinning, setIsSpinning] = useState(false)
   const [selectedPrize, setSelectedPrize] = useState<Prize | null>(null)
   const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null)
+  const [selectedPromoCode, setSelectedPromoCode] = useState<string | null>(null)
   const [resultOpen, setResultOpen] = useState(false)
   const [resultClaimed, setResultClaimed] = useState(false)
   const [infoPanel, setInfoPanel] = useState<InfoPanel>(null)
@@ -147,6 +149,7 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
 
     setCopied(false)
     setSelectedPrize(null)
+    setSelectedPromoCode(null)
     setResultClaimed(false)
     setIsSpinning(true)
     setInstantMove(true)
@@ -162,9 +165,11 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
     if (spinTimeoutRef.current) window.clearTimeout(spinTimeoutRef.current)
     spinTimeoutRef.current = window.setTimeout(() => {
       const claimId = `${winner.id}-${Date.now()}`
+      const promoCode = winner.code ? `${winner.code}-${String(spinsUsed + 1).padStart(2, "0")}` : undefined
       setSelectedPrize(winner)
       setSelectedClaimId(claimId)
-      setWonPrizes((items) => [{ claimId, prize: winner, claimed: false }, ...items])
+      setSelectedPromoCode(promoCode ?? null)
+      setWonPrizes((items) => [{ claimId, prize: winner, claimed: false, promoCode }, ...items])
       setSpinsLeft((value) => Math.max(0, value - 1))
       setIsSpinning(false)
       setResultOpen(true)
@@ -185,14 +190,15 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
     setResultOpen(false)
     setSelectedPrize(null)
     setSelectedClaimId(null)
+    setSelectedPromoCode(null)
     setResultClaimed(false)
     setCopied(false)
   }
 
   async function copyPromoCode() {
-    if (!selectedPrize?.code) return
+    if (!selectedPromoCode) return
     try {
-      await navigator.clipboard.writeText(selectedPrize.code)
+      await navigator.clipboard.writeText(selectedPromoCode)
       setCopied(true)
     } catch {
       setCopied(false)
@@ -207,6 +213,7 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
     setIsSpinning(false)
     setSelectedPrize(null)
     setSelectedClaimId(null)
+    setSelectedPromoCode(null)
     setResultOpen(false)
     setResultClaimed(false)
     setInfoPanel(null)
@@ -328,11 +335,11 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
                 <img src={selectedPrize.image} alt={selectedPrize.title} />
               </div>
 
-              {resultClaimed && selectedPrize.kind === "promo" && selectedPrize.code ? (
+              {resultClaimed && selectedPrize.kind === "promo" && selectedPromoCode ? (
                 <div className="pw-code-box">
                   <span>Ваш промокод</span>
                   <div>
-                    <strong>{selectedPrize.code}</strong>
+                    <strong>{selectedPromoCode}</strong>
                     <button type="button" onClick={copyPromoCode} aria-label="Скопировать промокод">
                       {copied ? <Check aria-hidden="true" /> : <Clipboard aria-hidden="true" />}
                     </button>
@@ -410,7 +417,26 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
               ) : (
                 <div className="pw-win-list" role="tabpanel">
                   {wonPrizes.map((item) => (
-                    item.claimed ? (
+                    item.claimed && item.prize.kind === "promo" ? (
+                      <button
+                        type="button"
+                        key={item.claimId}
+                        className="pw-prize-row pw-prize-row--promo"
+                        onClick={() => {
+                          setSelectedPrize(item.prize)
+                          setSelectedClaimId(item.claimId)
+                          setSelectedPromoCode(item.promoCode ?? item.prize.code ?? null)
+                          setResultClaimed(true)
+                          setCopied(false)
+                          setInfoPanel(null)
+                          setResultOpen(true)
+                        }}
+                      >
+                        <img src={item.prize.image} alt="" />
+                        <span><strong>{item.prize.title}</strong><small>Промокод получен</small></span>
+                        <b>Открыть</b>
+                      </button>
+                    ) : item.claimed ? (
                       <div key={item.claimId} className={`pw-prize-row pw-prize-row--${item.prize.kind}`}>
                         <img src={item.prize.image} alt="" />
                         <span><strong>{item.prize.title}</strong><small>Получен</small></span>
@@ -424,7 +450,9 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
                         onClick={() => {
                           setSelectedPrize(item.prize)
                           setSelectedClaimId(item.claimId)
+                          setSelectedPromoCode(item.promoCode ?? null)
                           setResultClaimed(false)
+                          setCopied(false)
                           setInfoPanel(null)
                           setResultOpen(true)
                         }}
