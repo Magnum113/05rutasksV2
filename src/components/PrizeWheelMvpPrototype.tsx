@@ -52,7 +52,7 @@ const PRIZES: Prize[] = [
     id: "promo-10",
     title: "Скидка 10% на заказ",
     shortTitle: "−10% на заказ",
-    description: "Индивидуальный промокод на скидку 10%. Срок действия — 14 дней.",
+    description: "Промокод на скидку 10%. Срок действия — 14 дней.",
     image: "/prize-wheel/promo-10.webp",
     kind: "promo",
     code: "WHEEL10-5RU",
@@ -61,7 +61,7 @@ const PRIZES: Prize[] = [
     id: "promo-15",
     title: "Скидка 15% на товары",
     shortTitle: "−15% на товары",
-    description: "Индивидуальный промокод на выбранные товары. Срок действия — 7 дней.",
+    description: "Промокод на выбранные товары. Срок действия — 7 дней.",
     image: "/prize-wheel/promo-15.webp",
     kind: "promo",
     code: "GIFT15-5RU",
@@ -330,7 +330,7 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
 
               {resultClaimed && selectedPrize.kind === "promo" && selectedPrize.code ? (
                 <div className="pw-code-box">
-                  <span>Ваш индивидуальный промокод</span>
+                  <span>Ваш промокод</span>
                   <div>
                     <strong>{selectedPrize.code}</strong>
                     <button type="button" onClick={copyPromoCode} aria-label="Скопировать промокод">
@@ -402,7 +402,7 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
                       <img src={prize.image} alt="" />
                       <span>
                         <strong>{prize.title}</strong>
-                        <small>{prize.kind === "bonus" ? "Бонусы" : "Индивидуальный промокод"}</small>
+                        <small>{prize.kind === "bonus" ? "Бонусы" : "Промокод"}</small>
                       </span>
                     </div>
                   ))}
