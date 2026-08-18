@@ -112,7 +112,7 @@ const MVP_WIN_SEQUENCE = ["promo-10", "bonus-100", "promo-15", "bonus-100", "bon
 const FULL_WIN_SEQUENCE = ["points-20", "physical-headphones", "promo-10", "bonus-100", "points-20"]
 const INITIAL_REEL_INDEX = 8
 const ANIMATION_MS = 2850
-const FULL_INITIAL_FREE_SPINS = 1
+const MVP_INITIAL_FREE_SPINS = 5
 const FULL_INITIAL_ACTIVITY_POINTS = 40
 const ACTIVITY_POINT_SPIN_COST = 10
 
@@ -133,7 +133,7 @@ interface PrizeWheelPrototypeProps extends PrizeWheelMvpPrototypeProps {
 
 function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
   const isFullVersion = version === "full"
-  const initialFreeSpins = isFullVersion ? FULL_INITIAL_FREE_SPINS : 5
+  const initialFreeSpins = isFullVersion ? 0 : MVP_INITIAL_FREE_SPINS
   const configuredPrizes = isFullVersion ? FULL_PRIZES : MVP_PRIZES
   const winSequence = isFullVersion ? FULL_WIN_SEQUENCE : MVP_WIN_SEQUENCE
   const reelViewportRef = useRef<HTMLDivElement | null>(null)
@@ -384,11 +384,13 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
           </div>
 
           <div className="pw-balance-group" aria-live="polite">
-            <div className="pw-spin-balance">
-              <Gift aria-hidden="true" />
-              <strong>{freeSpinsLeft}</strong>
-              <span>{freeSpinsLeft === 1 ? "вращение" : freeSpinsLeft > 1 && freeSpinsLeft < 5 ? "вращения" : "вращений"}</span>
-            </div>
+            {!isFullVersion ? (
+              <div className="pw-spin-balance">
+                <Gift aria-hidden="true" />
+                <strong>{freeSpinsLeft}</strong>
+                <span>{freeSpinsLeft === 1 ? "вращение" : freeSpinsLeft > 1 && freeSpinsLeft < 5 ? "вращения" : "вращений"}</span>
+              </div>
+            ) : null}
             {isFullVersion ? (
               <div className="pw-spin-balance pw-points-balance">
                 <CircleDollarSign aria-hidden="true" />
@@ -418,7 +420,7 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
             <h1>{isFullVersion ? "Выполняйте задания и обменивайте очки на призы" : "Крутите ленту — каждый раз выигрывайте приз"}</h1>
             <p>
               {isFullVersion
-                ? "В демо осталось одно бесплатное вращение; затем каждое вращение стоит 10 очков активности."
+                ? "Каждое вращение стоит 10 очков активности. Зарабатывайте очки, выполняя задания."
                 : "Вам доступно пять бесплатных вращений. В ленте нет пустых секторов."}
             </p>
           </div>
@@ -479,7 +481,7 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
                     ? "Заработайте очки активности в заданиях"
                     : "Все бесплатные вращения использованы"}
             </p>
-            {isFullVersion && !canSpin && freeSpinsLeft === 0 ? (
+            {isFullVersion && !canSpin ? (
               <button className="pw-earn-button" type="button" onClick={() => setInfoPanel("tasks")}>
                 Перейти к заданиям
               </button>
@@ -688,8 +690,9 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
 
           {infoPanel === "rules" ? (
             <div className="pw-rules">
-              <p>Каждому авторизованному пользователю один раз доступны 5 бесплатных вращений.</p>
-              {isFullVersion ? <p>После бесплатных вращений каждое новое стоит 10 очков активности.</p> : null}
+              {isFullVersion
+                ? <p>Каждое вращение стоит 10 очков активности. Бесплатные вращения в полной версии не выдаются.</p>
+                : <p>Каждому авторизованному пользователю один раз доступны 5 бесплатных вращений.</p>}
               <p>Каждое вращение гарантированно определяет один доступный приз. Возможность повторного выигрыша зависит от настроек приза.</p>
               <p>Выигранный приз нужно получить кнопкой «Забрать приз» в течение 7 дней. Незабранные призы сохраняются во вкладке «Вы выиграли» и не ограничивают следующие вращения.</p>
               <p>
