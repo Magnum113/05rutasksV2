@@ -300,7 +300,7 @@
   align-items: flex-end;
   gap: clamp(18px, 2vw, 34px);
   visibility: hidden;
-  transition: transform 2.85s cubic-bezier(0.12, 0.68, 0.08, 1);
+  transition: transform var(--pw-spin-duration, 4s) cubic-bezier(0.12, 0.68, 0.08, 1);
   will-change: transform;
 }
 

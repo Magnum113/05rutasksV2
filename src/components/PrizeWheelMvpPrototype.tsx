@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react"
 import {
   ArrowLeft,
   Check,
@@ -111,7 +111,7 @@ const FULL_PRIZES: Prize[] = [
 const MVP_WIN_SEQUENCE = ["promo-10", "bonus-100", "promo-15", "bonus-100", "bonus-10000"]
 const FULL_WIN_SEQUENCE = ["points-20", "physical-headphones", "promo-10", "bonus-100", "points-20"]
 const INITIAL_REEL_INDEX = 8
-const ANIMATION_MS = 2850
+const ANIMATION_MS = 4000
 const MVP_INITIAL_FREE_SPINS = 5
 const FULL_INITIAL_ACTIVITY_POINTS = 40
 const ACTIVITY_POINT_SPIN_COST = 10
@@ -370,7 +370,10 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
           : "Вращения закончились"
 
   return (
-    <div className={`pw-page${isFullVersion ? " pw-page--full" : ""}`}>
+    <div
+      className={`pw-page${isFullVersion ? " pw-page--full" : ""}`}
+      style={{ "--pw-spin-duration": `${ANIMATION_MS}ms` } as CSSProperties}
+    >
       <div className="pw-stage">
         <header className="pw-header">
           <button className="pw-back-button" type="button" onClick={onBack} aria-label="Вернуться в админку">
