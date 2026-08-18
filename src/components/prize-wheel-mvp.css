@@ -905,42 +905,88 @@
 
 .pw-task-row {
   display: grid;
-  grid-template-columns: 42px 1fr auto;
+  grid-template-columns: 42px minmax(0, 1fr) auto 18px;
   align-items: center;
   gap: 12px;
-  min-height: 72px;
-  padding: 10px 13px;
+  min-height: 82px;
+  padding: 12px 14px;
   border: 1px solid #e4e7ec;
   border-radius: 16px;
   background: #ffffff;
+  color: #101828;
+  text-decoration: none;
+  transition-property: transform, border-color, box-shadow;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
 }
 
-.pw-task-row > svg {
+.pw-task-row:hover {
+  border-color: #fda4af;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.08);
+}
+
+.pw-task-row:focus-visible {
+  outline: 3px solid rgba(239, 0, 22, 0.22);
+  outline-offset: 2px;
+}
+
+.pw-task-row:active {
+  transform: scale(0.96);
+}
+
+.pw-task-icon {
   width: 26px;
   height: 26px;
   color: var(--pw-red);
 }
 
-.pw-task-row > span {
+.pw-task-copy {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  min-width: 0;
+  gap: 4px;
 }
 
-.pw-task-row strong {
+.pw-task-copy strong {
   font-size: 14px;
 }
 
-.pw-task-row small {
+.pw-task-copy small {
+  display: -webkit-box;
+  overflow: hidden;
   color: #667085;
   font-size: 12px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-.pw-task-row > b {
+.pw-task-reward {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 58px;
   padding: 6px 9px;
   border-radius: 999px;
   background: var(--pw-yellow);
+  color: #101010;
+  line-height: 1;
+}
+
+.pw-task-reward b {
   font-size: 13px;
+}
+
+.pw-task-reward small {
+  margin-top: 3px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.pw-task-arrow {
+  width: 17px;
+  height: 17px;
+  color: #98a2b3;
 }
 
 @keyframes pw-spin {

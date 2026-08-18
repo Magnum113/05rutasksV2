@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react"
 import {
+  ArrowUpRight,
   ArrowLeft,
   Check,
   ChevronDown,
@@ -709,16 +710,24 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
           {infoPanel === "tasks" ? (
             <div className="pw-tasks-panel">
               <p>Выполняйте задания, чтобы получать очки активности для новых вращений.</p>
-              <div className="pw-task-row">
-                <ListChecks aria-hidden="true" />
-                <span><strong>Оформить заказ</strong><small>Награда: 20 очков активности</small></span>
-                <b>+20</b>
-              </div>
-              <div className="pw-task-row">
-                <Sparkles aria-hidden="true" />
-                <span><strong>Посетить подборку недели</strong><small>Награда: 10 очков активности</small></span>
-                <b>+10</b>
-              </div>
+              <a className="pw-task-row" href="https://05.ru/catalog">
+                <ListChecks className="pw-task-icon" aria-hidden="true" />
+                <span className="pw-task-copy">
+                  <strong>Оформить заказ</strong>
+                  <small>Выберите товары и оформите заказ на сумму от 3 000 ₽.</small>
+                </span>
+                <span className="pw-task-reward"><b>+20</b><small>очков</small></span>
+                <ArrowUpRight className="pw-task-arrow" aria-hidden="true" />
+              </a>
+              <a className="pw-task-row" href="https://05.ru/actions">
+                <Sparkles className="pw-task-icon" aria-hidden="true" />
+                <span className="pw-task-copy">
+                  <strong>Посетить подборку недели</strong>
+                  <small>Откройте подборку и посмотрите актуальные товары недели.</small>
+                </span>
+                <span className="pw-task-reward"><b>+10</b><small>очков</small></span>
+                <ArrowUpRight className="pw-task-arrow" aria-hidden="true" />
+              </a>
               <button className="pw-modal-action" type="button" onClick={() => setInfoPanel(null)}>
                 Вернуться к колесу
               </button>
