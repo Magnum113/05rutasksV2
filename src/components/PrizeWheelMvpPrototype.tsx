@@ -360,7 +360,7 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
   }
 
   const primaryButtonLabel = isSpinning
-    ? "Лента крутится"
+    ? "Колесо вращается"
     : freeSpinsLeft > 0
       ? "Крутить бесплатно"
       : canPayWithPoints
@@ -417,15 +417,15 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
 
         <main className="pw-main">
           <div className="pw-intro">
-            <h1>{isFullVersion ? "Выполняйте задания и обменивайте очки на призы" : "Крутите ленту — каждый раз выигрывайте приз"}</h1>
+            <h1>{isFullVersion ? "Выполняйте задания и обменивайте очки на призы" : "Крутите колесо — приз уже ждёт"}</h1>
             <p>
               {isFullVersion
                 ? "Каждое вращение стоит 10 очков активности. Зарабатывайте очки, выполняя задания."
-                : "Вам доступно пять бесплатных вращений. В ленте нет пустых секторов."}
+                : "Вам доступно пять бесплатных вращений."}
             </p>
           </div>
 
-          <section className={`pw-reel-shell${isIdleScrolling ? " pw-reel-shell--idle" : ""}`} aria-label="Лента призов">
+          <section className={`pw-reel-shell${isIdleScrolling ? " pw-reel-shell--idle" : ""}`} aria-label="Колесо призов">
             <div className="pw-selector" aria-hidden="true">
               <ChevronDown />
             </div>
@@ -680,7 +680,7 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
                     <div className="pw-empty-state">
                       <Gift aria-hidden="true" />
                       <strong>Здесь появятся ваши призы</strong>
-                      <span>Крутите ленту — каждый раз в ней есть подарок.</span>
+                      <span>Крутите колесо — каждое вращение приносит приз.</span>
                     </div>
                   ) : null}
                 </div>
