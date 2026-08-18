@@ -61,6 +61,25 @@ type TypeFilter = "all" | TaskType
 type StatusFilter = "all" | TaskStatus
 type PublicationFilter = "all" | "draft" | "published"
 
+const ADMIN_ROOT_PATH = "/"
+const PRIZE_WHEEL_PATH = "/marketing/prize-wheel"
+
+function resolveScreenFromLocation(): Screen {
+  const route = new URLSearchParams(window.location.search).get("screen")
+  if (route === "wheel-mvp") return "wheelPrototype"
+  if (route === "wheel-full") return "wheelFullPrototype"
+
+  const normalizedPath = window.location.pathname.replace(/\/+$/, "") || ADMIN_ROOT_PATH
+  return normalizedPath === PRIZE_WHEEL_PATH ? "wheel" : "tasks"
+}
+
+function getScreenUrl(screen: Screen): string {
+  if (screen === "wheel") return PRIZE_WHEEL_PATH
+  if (screen === "wheelPrototype") return `${PRIZE_WHEEL_PATH}?screen=wheel-mvp`
+  if (screen === "wheelFullPrototype") return `${PRIZE_WHEEL_PATH}?screen=wheel-full`
+  return ADMIN_ROOT_PATH
+}
+
 interface TasksFilters {
   status: StatusFilter
   type: TypeFilter
@@ -250,12 +269,7 @@ function App() {
 
   const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS)
 
-  const [screen, setScreen] = useState<Screen>(() => {
-    const route = new URLSearchParams(window.location.search).get("screen")
-    if (route === "wheel-mvp") return "wheelPrototype"
-    if (route === "wheel-full") return "wheelFullPrototype"
-    return "tasks"
-  })
+  const [screen, setScreen] = useState<Screen>(resolveScreenFromLocation)
   const [globalSearch, setGlobalSearch] = useState("")
   const [promoCreateSignal, setPromoCreateSignal] = useState(0)
   const [discountCreateSignal, setDiscountCreateSignal] = useState(0)
@@ -289,6 +303,12 @@ function App() {
   })
 
   useEffect(() => {
+    const syncScreenWithHistory = () => setScreen(resolveScreenFromLocation())
+    window.addEventListener("popstate", syncScreenWithHistory)
+    return () => window.removeEventListener("popstate", syncScreenWithHistory)
+  }, [])
+
+  useEffect(() => {
     if (!flash) {
       return
     }
@@ -296,6 +316,20 @@ function App() {
     const timeout = setTimeout(() => setFlash(null), 2800)
     return () => clearTimeout(timeout)
   }, [flash])
+
+  function navigateToScreen(nextScreen: Screen, replace = false) {
+    const nextUrl = getScreenUrl(nextScreen)
+    const currentUrl = `${window.location.pathname}${window.location.search}`
+
+    if (currentUrl !== nextUrl) {
+      if (replace) {
+        window.history.replaceState(null, "", nextUrl)
+      } else {
+        window.history.pushState(null, "", nextUrl)
+      }
+    }
+    setScreen(nextScreen)
+  }
 
   const availableTasks = useMemo(() => tasks.filter((task) => !task.archived), [tasks])
 
@@ -434,37 +468,34 @@ function App() {
     setEditorForm(createEmptyEditorForm(now))
     setFormErrors([])
     setFieldErrors({})
-    setScreen("editor")
+    navigateToScreen("editor")
   }
 
   function beginCreatePromo() {
-    setScreen("promo")
+    navigateToScreen("promo")
     setPromoCreateSignal((prev) => prev + 1)
   }
 
   function beginCreateDiscount() {
-    setScreen("discounts")
+    navigateToScreen("discounts")
     setDiscountCreateSignal((prev) => prev + 1)
   }
 
   function beginCreatePersonal() {
-    setScreen("personal")
+    navigateToScreen("personal")
     setPersonalCreateSignal((prev) => prev + 1)
   }
 
   function openWheelPrototype() {
-    window.history.replaceState(null, "", `${window.location.pathname}?screen=wheel-mvp`)
-    setScreen("wheelPrototype")
+    navigateToScreen("wheelPrototype")
   }
 
   function openWheelFullPrototype() {
-    window.history.replaceState(null, "", `${window.location.pathname}?screen=wheel-full`)
-    setScreen("wheelFullPrototype")
+    navigateToScreen("wheelFullPrototype")
   }
 
   function closeWheelPrototype() {
-    window.history.replaceState(null, "", window.location.pathname)
-    setScreen("wheel")
+    navigateToScreen("wheel", true)
   }
 
   function beginEditTask(task: Task) {
@@ -472,7 +503,7 @@ function App() {
     setEditorForm(taskToEditorForm(task))
     setFormErrors([])
     setFieldErrors({})
-    setScreen("editor")
+    navigateToScreen("editor")
   }
 
   function toggleTaskSelection(taskId: string, checked: boolean) {
@@ -799,7 +830,7 @@ function App() {
     setEditorForm(createEmptyEditorForm(now))
     setFormErrors([])
     setFieldErrors({})
-    setScreen("tasks")
+    navigateToScreen("tasks")
   }
 
   function renderStatusBadge(status: TaskStatus) {
@@ -856,7 +887,7 @@ function App() {
               <Button
                 className="w-full justify-start"
                 variant={screen === "tasks" ? "default" : "secondary"}
-                onClick={() => setScreen("tasks")}
+                onClick={() => navigateToScreen("tasks")}
               >
                 Задания
               </Button>
@@ -867,7 +898,7 @@ function App() {
                   if (!editingTaskId) {
                     beginCreateTask()
                   } else {
-                    setScreen("editor")
+                    navigateToScreen("editor")
                   }
                 }}
               >
@@ -876,28 +907,28 @@ function App() {
               <Button
                 className="w-full justify-start"
                 variant={screen === "discounts" ? "default" : "secondary"}
-                onClick={() => setScreen("discounts")}
+                onClick={() => navigateToScreen("discounts")}
               >
                 Скидки
               </Button>
               <Button
                 className="w-full justify-start"
                 variant={screen === "promo" ? "default" : "secondary"}
-                onClick={() => setScreen("promo")}
+                onClick={() => navigateToScreen("promo")}
               >
                 Промокоды
               </Button>
               <Button
                 className="w-full justify-start"
                 variant={screen === "personal" ? "default" : "secondary"}
-                onClick={() => setScreen("personal")}
+                onClick={() => navigateToScreen("personal")}
               >
                 Индивидуальные промокоды
               </Button>
               <Button
                 className="w-full justify-start"
                 variant={screen === "wheel" ? "default" : "secondary"}
-                onClick={() => setScreen("wheel")}
+                onClick={() => navigateToScreen("wheel")}
               >
                 Колесо призов
               </Button>
@@ -1163,7 +1194,7 @@ function App() {
                   globalSearch={globalSearch}
                   promoCreateSignal={promoCreateSignal}
                   discountCreateSignal={discountCreateSignal}
-                  onNavigate={(next) => setScreen(next)}
+                  onNavigate={navigateToScreen}
                 />
               ) : null}
 
@@ -1577,7 +1608,7 @@ function App() {
                             setEditorForm(createEmptyEditorForm(now))
                             setFormErrors([])
                             setFieldErrors({})
-                            setScreen("tasks")
+                            navigateToScreen("tasks")
                           }}
                         >
                           Отмена
