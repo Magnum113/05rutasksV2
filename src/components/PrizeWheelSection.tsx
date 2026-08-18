@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react"
-import { ChevronDown, ChevronUp, Eye, EyeOff, Gift, Plus, RotateCcw, Save, Settings2, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronUp, ExternalLink, Eye, EyeOff, Gift, Plus, RotateCcw, Save, Settings2, Trash2 } from "lucide-react"
 
 import {
   MOCK_WHEEL_CONFIGURATION,
@@ -30,6 +30,8 @@ import { cn } from "@/lib/utils"
 
 interface PrizeWheelSectionProps {
   globalSearch: string
+  onOpenMvpPrototype: () => void
+  onOpenFullPrototype: () => void
 }
 
 type WheelTab = "settings" | "spins"
@@ -80,6 +82,7 @@ function createPrize(configuration: WheelConfiguration): WheelPrize {
     display_to: toDateTimeInput(end),
     selection_weight: 100,
     total_stock: null,
+    repeatable_per_user: true,
     issued_count: 0,
     status: "active",
     visual_order: order,
@@ -170,7 +173,7 @@ function SelectField(props: {
   )
 }
 
-export function PrizeWheelSection({ globalSearch }: PrizeWheelSectionProps) {
+export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFullPrototype }: PrizeWheelSectionProps) {
   const [configuration, setConfiguration] = useState<WheelConfiguration>(() =>
     deepCloneConfiguration(MOCK_WHEEL_CONFIGURATION),
   )
@@ -328,11 +331,20 @@ export function PrizeWheelSection({ globalSearch }: PrizeWheelSectionProps) {
 
       if (prize.reward_type === "activity_points") {
         if (publish) {
-          addError(`${prefix}.reward_type`, `${label}: очки активности станут доступны только в Итерации 2`)
+          addError(`${prefix}.reward_type`, `${label}: очки активности станут доступны только в полной версии`)
         }
         if (!prize.points_amount || prize.points_amount <= 0) addError(`${prefix}.points_amount`, `${label}: количество очков должно быть больше 0`)
         if (!prize.points_ttl_days || !Number.isInteger(prize.points_ttl_days) || prize.points_ttl_days <= 0) {
           addError(`${prefix}.points_ttl_days`, `${label}: срок жизни очков в днях обязателен`)
+        }
+      }
+
+      if (prize.reward_type === "physical_prize") {
+        if (publish) {
+          addError(`${prefix}.reward_type`, `${label}: физические призы станут доступны только в полной версии`)
+        }
+        if (prize.total_stock === null || !Number.isInteger(prize.total_stock) || prize.total_stock <= 0) {
+          addError(`${prefix}.total_stock`, `${label}: для физического приза обязателен запас больше 0`)
         }
       }
 
@@ -410,6 +422,14 @@ export function PrizeWheelSection({ globalSearch }: PrizeWheelSectionProps) {
           <Button variant={tab === "spins" ? "default" : "secondary"} onClick={() => setTab("spins")}>
             Реестр вращений
           </Button>
+          <Button variant="outline" onClick={onOpenMvpPrototype}>
+            <ExternalLink aria-hidden="true" />
+            Открыть MVP
+          </Button>
+          <Button variant="outline" onClick={onOpenFullPrototype}>
+            <ExternalLink aria-hidden="true" />
+            Открыть полную версию
+          </Button>
         </div>
       </div>
 
@@ -427,10 +447,10 @@ export function PrizeWheelSection({ globalSearch }: PrizeWheelSectionProps) {
               {form.wheel_visibility_enabled ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
             </div>
             <div>
-              <p className="font-semibold">Показывать колесо во всех локациях</p>
+              <p className="font-semibold">Показывать колесо пользователям</p>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                Флаг Итерации 2. При выключении точки входа скрываются и новые вращения блокируются,
-                но остаток вращений, история и уже выигранные призы сохраняются.
+                Флаг MVP. При выключении колесо исчезает из всех точек входа, не открывается по прямой
+                ссылке, а новые вращения блокируются. Настройки, остаток вращений и история сохраняются.
               </p>
             </div>
           </div>
@@ -465,7 +485,7 @@ export function PrizeWheelSection({ globalSearch }: PrizeWheelSectionProps) {
                 options={[
                   { value: "all", label: "Все типы" },
                   ...Object.entries(WHEEL_REWARD_TYPE_LABELS)
-                    .filter(([value]) => value !== "activity_points")
+                    .filter(([value]) => value !== "activity_points" && value !== "physical_prize")
                     .map(([value, label]) => ({ value, label })),
                 ]}
                 onChange={(value) => setSpinFilters((previous) => ({ ...previous, rewardType: value as SpinFilters["rewardType"] }))}
@@ -571,7 +591,7 @@ export function PrizeWheelSection({ globalSearch }: PrizeWheelSectionProps) {
               <Card>
                 <CardHeader>
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div><CardTitle>Призы</CardTitle><p className="mt-1 text-sm text-muted-foreground">В пользовательском интерфейсе активные призы прокручиваются горизонтальной лентой. Вес влияет только на выбор backend.</p></div>
+                    <div><CardTitle>Призы</CardTitle><p className="mt-1 text-sm text-muted-foreground">В пользовательском интерфейсе доступные пользователю призы прокручиваются горизонтальной лентой. Вес влияет только на выбор backend.</p></div>
                     <Button onClick={addPrize}><Plus aria-hidden="true" />Добавить приз</Button>
                   </div>
                 </CardHeader>
@@ -621,10 +641,23 @@ export function PrizeWheelSection({ globalSearch }: PrizeWheelSectionProps) {
                       <FieldBlock label="Ссылка кнопки *" error={fieldErrors[`prize.${selectedPrize.id}.action_button_url`]}><Input value={selectedPrize.action_button_url} onChange={(event) => setPrizeField(selectedPrize.id, "action_button_url", event.target.value)} /></FieldBlock>
                     </div>
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                      <FieldBlock label="Вес выпадения *" hint={`Эффективно сейчас: ${formatProbability(effectiveProbability(selectedPrize, form.prizes))}`} error={fieldErrors[`prize.${selectedPrize.id}.selection_weight`]}><Input type="number" min="1" step="1" value={selectedPrize.selection_weight} onChange={(event) => setPrizeField(selectedPrize.id, "selection_weight", Number(event.target.value))} /></FieldBlock>
+                      <FieldBlock label="Вес выпадения *" hint={`Базовая вероятность сейчас: ${formatProbability(effectiveProbability(selectedPrize, form.prizes))}`} error={fieldErrors[`prize.${selectedPrize.id}.selection_weight`]}><Input type="number" min="1" step="1" value={selectedPrize.selection_weight} onChange={(event) => setPrizeField(selectedPrize.id, "selection_weight", Number(event.target.value))} /></FieldBlock>
                       <FieldBlock label="Запас" hint="Пусто — без ограничения" error={fieldErrors[`prize.${selectedPrize.id}.total_stock`]}><Input type="number" min="1" step="1" value={selectedPrize.total_stock ?? ""} onChange={(event) => setPrizeField(selectedPrize.id, "total_stock", event.target.value === "" ? null : Number(event.target.value))} /></FieldBlock>
                       <SelectField label="Статус" value={selectedPrize.status} options={[{ value: "active", label: "Активен" }, { value: "inactive", label: "Неактивен" }]} onChange={(value) => setPrizeField(selectedPrize.id, "status", value as WheelPrize["status"])} />
                     </div>
+                    <Field orientation="horizontal" className="rounded-lg border p-4">
+                      <Checkbox
+                        id={`repeatable-${selectedPrize.id}`}
+                        checked={selectedPrize.repeatable_per_user}
+                        onCheckedChange={(checked) => setPrizeField(selectedPrize.id, "repeatable_per_user", checked === true)}
+                      />
+                      <div className="flex flex-col gap-1">
+                        <FieldLabel htmlFor={`repeatable-${selectedPrize.id}`}>Можно выиграть повторно</FieldLabel>
+                        <FieldDescription>
+                          Если выключено, после первого выигрыша этот приз больше не выпадает тому же пользователю.
+                        </FieldDescription>
+                      </div>
+                    </Field>
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                       <FieldBlock label="Показывать с *"><Input type="datetime-local" value={selectedPrize.display_from} onChange={(event) => setPrizeField(selectedPrize.id, "display_from", event.target.value)} /></FieldBlock>
                       <FieldBlock label="Показывать до *" error={fieldErrors[`prize.${selectedPrize.id}.display_to`]}><Input type="datetime-local" value={selectedPrize.display_to} onChange={(event) => setPrizeField(selectedPrize.id, "display_to", event.target.value)} /></FieldBlock>
@@ -634,11 +667,11 @@ export function PrizeWheelSection({ globalSearch }: PrizeWheelSectionProps) {
                       value={selectedPrize.reward_type}
                       options={Object.entries(WHEEL_REWARD_TYPE_LABELS).map(([value, label]) => ({
                         value,
-                        label: value === "activity_points" ? `${label} — Итерация 2` : label,
-                        disabled: value === "activity_points",
+                        label: value === "activity_points" || value === "physical_prize" ? `${label} — полная версия` : label,
+                        disabled: value === "activity_points" || value === "physical_prize",
                       }))}
                       onChange={(value) => setPrizeRewardType(selectedPrize.id, value as WheelRewardType)}
-                      hint="В MVP доступны бонусы и промокоды. Очки активности добавляются в полной версии."
+                      hint="В MVP доступны только бонусы и промокоды. Очки активности и физические призы добавляются в полной версии."
                     />
 
                     {selectedPrize.reward_type === "bonus" ? (
@@ -686,12 +719,13 @@ export function PrizeWheelSection({ globalSearch }: PrizeWheelSectionProps) {
               <CardHeader><CardTitle>Правила механики</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-1 gap-3 text-sm text-muted-foreground md:grid-cols-2">
                 <p>Каждое вращение гарантирует один приз. Варианта «Без приза» нет.</p>
-                <p>Пользователь видит горизонтальную ленту активных призов без весов и процентов.</p>
+                <p>Пользователь видит горизонтальную ленту доступных ему призов без весов и процентов.</p>
                 <p>Backend заранее фиксирует результат, после чего лента останавливается на выбранном призе.</p>
-                <p>До получения предыдущего приза следующее вращение заблокировано.</p>
+                <p>Незабранный или выдающийся приз хранится во вкладке «Вы выиграли» и не блокирует следующее вращение.</p>
                 <p>Запас закончился — приз исключается, остальные продолжают выпадать по своим весам.</p>
+                <p>Повторный выигрыш настраивается для каждого приза; при запрете приз исчезает из пула пользователя после первого выигрыша.</p>
                 <p>В MVP призами являются только бонусы и промокоды.</p>
-                <p>В Итерации 2 очки активности добавляются и как приз, и как оплата вращения.</p>
+                <p>В полной версии добавляются очки активности как приз и оплата вращения, а также физические призы.</p>
               </CardContent>
             </Card>
           </div>

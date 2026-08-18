@@ -28,7 +28,7 @@ import { Button } from "@/components/ui/button"
 import { PromoCodesSection } from "@/components/PromoCodesSection"
 import { PersonalPromoSection } from "@/components/PersonalPromoSection"
 import { PrizeWheelSection } from "@/components/PrizeWheelSection"
-import { PrizeWheelMvpPrototype } from "@/components/PrizeWheelMvpPrototype"
+import { PrizeWheelFullPrototype, PrizeWheelMvpPrototype } from "@/components/PrizeWheelMvpPrototype"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   AlertDialog,
@@ -55,7 +55,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
-type Screen = "tasks" | "editor" | "discounts" | "promo" | "personal" | "wheel" | "wheelPrototype"
+type Screen = "tasks" | "editor" | "discounts" | "promo" | "personal" | "wheel" | "wheelPrototype" | "wheelFullPrototype"
 type RewardFilter = "all" | RewardType
 type TypeFilter = "all" | TaskType
 type StatusFilter = "all" | TaskStatus
@@ -250,9 +250,12 @@ function App() {
 
   const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS)
 
-  const [screen, setScreen] = useState<Screen>(() =>
-    new URLSearchParams(window.location.search).get("screen") === "wheel-mvp" ? "wheelPrototype" : "tasks",
-  )
+  const [screen, setScreen] = useState<Screen>(() => {
+    const route = new URLSearchParams(window.location.search).get("screen")
+    if (route === "wheel-mvp") return "wheelPrototype"
+    if (route === "wheel-full") return "wheelFullPrototype"
+    return "tasks"
+  })
   const [globalSearch, setGlobalSearch] = useState("")
   const [promoCreateSignal, setPromoCreateSignal] = useState(0)
   const [discountCreateSignal, setDiscountCreateSignal] = useState(0)
@@ -452,6 +455,11 @@ function App() {
   function openWheelPrototype() {
     window.history.replaceState(null, "", `${window.location.pathname}?screen=wheel-mvp`)
     setScreen("wheelPrototype")
+  }
+
+  function openWheelFullPrototype() {
+    window.history.replaceState(null, "", `${window.location.pathname}?screen=wheel-full`)
+    setScreen("wheelFullPrototype")
   }
 
   function closeWheelPrototype() {
@@ -829,6 +837,10 @@ function App() {
     return <PrizeWheelMvpPrototype onBack={closeWheelPrototype} />
   }
 
+  if (screen === "wheelFullPrototype") {
+    return <PrizeWheelFullPrototype onBack={closeWheelPrototype} />
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="flex min-h-screen flex-col lg:flex-row">
@@ -895,6 +907,13 @@ function App() {
                 onClick={openWheelPrototype}
               >
                 MVP-прототип колеса
+              </Button>
+              <Button
+                className="w-full justify-start"
+                variant="outline"
+                onClick={openWheelFullPrototype}
+              >
+                Полная версия колеса
               </Button>
             </nav>
           </div>
@@ -1157,7 +1176,11 @@ function App() {
               ) : null}
 
               {screen === "wheel" ? (
-                <PrizeWheelSection globalSearch={globalSearch} />
+                <PrizeWheelSection
+                  globalSearch={globalSearch}
+                  onOpenMvpPrototype={openWheelPrototype}
+                  onOpenFullPrototype={openWheelFullPrototype}
+                />
               ) : null}
 
               {screen === "editor" ? (

@@ -1,4 +1,4 @@
-export type WheelRewardType = "bonus" | "activity_points" | "promocode"
+export type WheelRewardType = "bonus" | "activity_points" | "promocode" | "physical_prize"
 export type WheelPromocodeMode = "personal" | "shared"
 export type WheelChannel = "web" | "app_webview"
 export type WheelSpinStatus =
@@ -19,6 +19,7 @@ export interface WheelPrize {
   display_to: string
   selection_weight: number
   total_stock: number | null
+  repeatable_per_user: boolean
   issued_count: number
   status: "active" | "inactive"
   visual_order: number
@@ -68,6 +69,7 @@ export const WHEEL_REWARD_TYPE_LABELS: Record<WheelRewardType, string> = {
   bonus: "Бонусы",
   activity_points: "Очки активности",
   promocode: "Промокод",
+  physical_prize: "Физический приз",
 }
 
 export const WHEEL_SPIN_STATUS_LABELS: Record<WheelSpinStatus, string> = {
@@ -110,6 +112,7 @@ export const MOCK_WHEEL_CONFIGURATION: WheelConfiguration = {
         display_to: "2026-12-31T23:59",
         selection_weight: 5000,
         total_stock: null,
+        repeatable_per_user: true,
         issued_count: 6180,
         status: "active",
         visual_order: 1,
@@ -133,6 +136,7 @@ export const MOCK_WHEEL_CONFIGURATION: WheelConfiguration = {
         display_to: "2026-12-31T23:59",
         selection_weight: 2499,
         total_stock: null,
+        repeatable_per_user: true,
         issued_count: 4985,
         status: "active",
         visual_order: 2,
@@ -156,6 +160,7 @@ export const MOCK_WHEEL_CONFIGURATION: WheelConfiguration = {
         display_to: "2026-12-31T23:59",
         selection_weight: 1,
         total_stock: 3,
+        repeatable_per_user: true,
         issued_count: 1,
         status: "active",
         visual_order: 3,

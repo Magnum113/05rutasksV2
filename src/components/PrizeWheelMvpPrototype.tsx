@@ -3,9 +3,12 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  CircleDollarSign,
   Clipboard,
   Gift,
+  ListChecks,
   LoaderCircle,
+  PackageOpen,
   RotateCcw,
   Sparkles,
 } from "lucide-react"
@@ -19,9 +22,10 @@ import {
 } from "@/components/ui/dialog"
 import "@/components/prize-wheel-mvp.css"
 
-type PrizeKind = "bonus" | "promo"
-type InfoPanel = "prizes" | "rules" | null
+type PrizeKind = "bonus" | "promo" | "points" | "physical"
+type InfoPanel = "prizes" | "rules" | "tasks" | null
 type PrizeTab = "available" | "won"
+type PrototypeVersion = "mvp" | "full"
 
 interface Prize {
   id: string
@@ -31,6 +35,9 @@ interface Prize {
   image: string
   kind: PrizeKind
   code?: string
+  repeatable?: boolean
+  pointsAmount?: number
+  pointsTtlDays?: number
 }
 
 interface WonPrize {
@@ -40,7 +47,7 @@ interface WonPrize {
   promoCode?: string
 }
 
-const PRIZES: Prize[] = [
+const MVP_PRIZES: Prize[] = [
   {
     id: "bonus-100",
     title: "100 бонусов",
@@ -74,24 +81,68 @@ const PRIZES: Prize[] = [
     description: "Главный бонусный приз будет начислен на ваш бонусный счёт.",
     image: "/prize-wheel/bonus-10000.webp",
     kind: "bonus",
+    repeatable: false,
   },
 ]
 
-const REEL_ITEMS = Array.from({ length: 6 }, () => PRIZES).flat()
-const WIN_SEQUENCE = [1, 0, 2, 0, 3]
+const FULL_PRIZES: Prize[] = [
+  ...MVP_PRIZES,
+  {
+    id: "points-20",
+    title: "20 очков активности",
+    shortTitle: "+20 очков",
+    description: "Очки активности можно потратить на новые вращения. Срок жизни — 30 дней.",
+    image: "/prize-wheel/activity-points.svg",
+    kind: "points",
+    pointsAmount: 20,
+    pointsTtlDays: 30,
+  },
+  {
+    id: "physical-headphones",
+    title: "Беспроводные наушники",
+    shortTitle: "Наушники",
+    description: "Заберите приз в магазине 05.ru по адресу: проспект Имама Шамиля, 5. Перед визитом позвоните по номеру +7 800 511-05-05.",
+    image: "/prize-wheel/physical-headphones.svg",
+    kind: "physical",
+    repeatable: false,
+  },
+]
+
+const MVP_WIN_SEQUENCE = ["promo-10", "bonus-100", "promo-15", "bonus-100", "bonus-10000"]
+const FULL_WIN_SEQUENCE = ["points-20", "physical-headphones", "promo-10", "bonus-100", "points-20"]
 const INITIAL_REEL_INDEX = 8
 const ANIMATION_MS = 2850
+const FULL_INITIAL_FREE_SPINS = 1
+const FULL_INITIAL_ACTIVITY_POINTS = 40
+const ACTIVITY_POINT_SPIN_COST = 10
+
+const PRIZE_KIND_LABELS: Record<PrizeKind, string> = {
+  bonus: "Бонусы",
+  promo: "Промокод",
+  points: "Очки активности",
+  physical: "Физический приз",
+}
 
 interface PrizeWheelMvpPrototypeProps {
   onBack: () => void
 }
 
-export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) {
+interface PrizeWheelPrototypeProps extends PrizeWheelMvpPrototypeProps {
+  version: PrototypeVersion
+}
+
+function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
+  const isFullVersion = version === "full"
+  const initialFreeSpins = isFullVersion ? FULL_INITIAL_FREE_SPINS : 5
+  const configuredPrizes = isFullVersion ? FULL_PRIZES : MVP_PRIZES
+  const winSequence = isFullVersion ? FULL_WIN_SEQUENCE : MVP_WIN_SEQUENCE
   const reelViewportRef = useRef<HTMLDivElement | null>(null)
   const reelFirstCardRef = useRef<HTMLElement | null>(null)
   const spinTimeoutRef = useRef<number | null>(null)
 
-  const [spinsLeft, setSpinsLeft] = useState(5)
+  const [freeSpinsLeft, setFreeSpinsLeft] = useState(initialFreeSpins)
+  const [activityPoints, setActivityPoints] = useState(isFullVersion ? FULL_INITIAL_ACTIVITY_POINTS : 0)
+  const [spinCount, setSpinCount] = useState(0)
   const [reelIndex, setReelIndex] = useState(INITIAL_REEL_INDEX)
   const [trackX, setTrackX] = useState(0)
   const [trackReady, setTrackReady] = useState(false)
@@ -108,8 +159,13 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
   const [copied, setCopied] = useState(false)
 
   const pendingPrizeCount = wonPrizes.filter((item) => !item.claimed).length
-  const spinsUsed = 5 - spinsLeft
   const userPrizesCount = wonPrizes.length
+  const availablePrizes = configuredPrizes.filter((prize) => (
+    prize.repeatable !== false || !wonPrizes.some((item) => item.prize.id === prize.id)
+  ))
+  const reelItems = Array.from({ length: 6 }, () => availablePrizes).flat()
+  const canPayWithPoints = isFullVersion && activityPoints >= ACTIVITY_POINT_SPIN_COST
+  const canSpin = freeSpinsLeft > 0 || canPayWithPoints
 
   useLayoutEffect(() => {
     const updateTrackPosition = () => {
@@ -129,7 +185,7 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
     updateTrackPosition()
     window.addEventListener("resize", updateTrackPosition)
     return () => window.removeEventListener("resize", updateTrackPosition)
-  }, [reelIndex])
+  }, [availablePrizes.length, reelIndex])
 
   useEffect(() => {
     return () => {
@@ -139,13 +195,15 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
 
   function beginSpin() {
     if (isSpinning) return
+    if (!canSpin || availablePrizes.length === 0) return
 
-    if (spinsLeft <= 0) return
-
-    const prizeIndex = WIN_SEQUENCE[spinsUsed % WIN_SEQUENCE.length]
-    const winner = PRIZES[prizeIndex]
-    const resetIndex = 4 + ((spinsUsed + 1) % PRIZES.length)
-    const targetIndex = 16 + prizeIndex
+    const scheduledPrizeId = winSequence[spinCount % winSequence.length]
+    const winner = availablePrizes.find((prize) => prize.id === scheduledPrizeId)
+      ?? availablePrizes[spinCount % availablePrizes.length]
+    const prizeIndex = availablePrizes.findIndex((prize) => prize.id === winner.id)
+    const resetIndex = availablePrizes.length + ((spinCount + 1) % availablePrizes.length)
+    const targetIndex = availablePrizes.length * 4 + prizeIndex
+    const useFreeSpin = freeSpinsLeft > 0
 
     setCopied(false)
     setSelectedPrize(null)
@@ -165,12 +223,17 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
     if (spinTimeoutRef.current) window.clearTimeout(spinTimeoutRef.current)
     spinTimeoutRef.current = window.setTimeout(() => {
       const claimId = `${winner.id}-${Date.now()}`
-      const promoCode = winner.code ? `${winner.code}-${String(spinsUsed + 1).padStart(2, "0")}` : undefined
+      const promoCode = winner.code ? `${winner.code}-${String(spinCount + 1).padStart(2, "0")}` : undefined
       setSelectedPrize(winner)
       setSelectedClaimId(claimId)
       setSelectedPromoCode(promoCode ?? null)
       setWonPrizes((items) => [{ claimId, prize: winner, claimed: false, promoCode }, ...items])
-      setSpinsLeft((value) => Math.max(0, value - 1))
+      if (useFreeSpin) {
+        setFreeSpinsLeft((value) => Math.max(0, value - 1))
+      } else {
+        setActivityPoints((value) => Math.max(0, value - ACTIVITY_POINT_SPIN_COST))
+      }
+      setSpinCount((value) => value + 1)
       setIsSpinning(false)
       setResultOpen(true)
       spinTimeoutRef.current = null
@@ -183,6 +246,9 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
     setWonPrizes((items) => items.map((item) => (
       item.claimId === selectedClaimId ? { ...item, claimed: true } : item
     )))
+    if (selectedPrize.kind === "points" && selectedPrize.pointsAmount) {
+      setActivityPoints((value) => value + selectedPrize.pointsAmount!)
+    }
     setResultClaimed(true)
   }
 
@@ -207,7 +273,9 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
 
   function resetDemo() {
     if (spinTimeoutRef.current) window.clearTimeout(spinTimeoutRef.current)
-    setSpinsLeft(5)
+    setFreeSpinsLeft(initialFreeSpins)
+    setActivityPoints(isFullVersion ? FULL_INITIAL_ACTIVITY_POINTS : 0)
+    setSpinCount(0)
     setReelIndex(INITIAL_REEL_INDEX)
     setInstantMove(true)
     setIsSpinning(false)
@@ -224,12 +292,16 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
 
   const primaryButtonLabel = isSpinning
     ? "Лента крутится"
-    : spinsLeft > 0
+    : freeSpinsLeft > 0
       ? "Крутить бесплатно"
-      : "Вращения закончились"
+      : canPayWithPoints
+        ? `Крутить за ${ACTIVITY_POINT_SPIN_COST} очков`
+        : isFullVersion
+          ? "Недостаточно очков"
+          : "Вращения закончились"
 
   return (
-    <div className="pw-page">
+    <div className={`pw-page${isFullVersion ? " pw-page--full" : ""}`}>
       <div className="pw-stage">
         <header className="pw-header">
           <button className="pw-back-button" type="button" onClick={onBack} aria-label="Вернуться в админку">
@@ -238,14 +310,23 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
           </button>
 
           <div className="pw-brand">
-            <span className="pw-brand-logo">05.RU</span>
+            <span className="pw-brand-logo" role="img" aria-label="05.RU" />
             <span className="pw-brand-product">Колесо призов</span>
           </div>
 
-          <div className="pw-spin-balance" aria-live="polite">
-            <Gift aria-hidden="true" />
-            <strong>{spinsLeft}</strong>
-            <span>{spinsLeft === 1 ? "вращение" : spinsLeft > 1 && spinsLeft < 5 ? "вращения" : "вращений"}</span>
+          <div className="pw-balance-group" aria-live="polite">
+            <div className="pw-spin-balance">
+              <Gift aria-hidden="true" />
+              <strong>{freeSpinsLeft}</strong>
+              <span>{freeSpinsLeft === 1 ? "вращение" : freeSpinsLeft > 1 && freeSpinsLeft < 5 ? "вращения" : "вращений"}</span>
+            </div>
+            {isFullVersion ? (
+              <div className="pw-spin-balance pw-points-balance">
+                <CircleDollarSign aria-hidden="true" />
+                <strong>{activityPoints}</strong>
+                <span>очков</span>
+              </div>
+            ) : null}
           </div>
 
           <nav className="pw-nav" aria-label="Разделы колеса призов">
@@ -254,13 +335,23 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
               <span>Призы</span>
               {userPrizesCount > 0 ? <b>{userPrizesCount}</b> : null}
             </button>
+            {isFullVersion ? (
+              <button type="button" onClick={() => setInfoPanel("tasks")}>
+                <ListChecks aria-hidden="true" />
+                <span>Задания</span>
+              </button>
+            ) : null}
           </nav>
         </header>
 
         <main className="pw-main">
           <div className="pw-intro">
-            <h1>Крутите ленту — каждый раз выигрывайте приз</h1>
-            <p>Вам доступно пять бесплатных вращений. В ленте нет пустых секторов.</p>
+            <h1>{isFullVersion ? "Выполняйте задания и обменивайте очки на призы" : "Крутите ленту — каждый раз выигрывайте приз"}</h1>
+            <p>
+              {isFullVersion
+                ? "В демо осталось одно бесплатное вращение; затем каждое вращение стоит 10 очков активности."
+                : "Вам доступно пять бесплатных вращений. В ленте нет пустых секторов."}
+            </p>
           </div>
 
           <section className="pw-reel-shell" aria-label="Лента призов">
@@ -272,7 +363,7 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
                 className={`pw-reel-track${instantMove ? " pw-reel-track--instant" : ""}${trackReady ? " pw-reel-track--ready" : ""}`}
                 style={{ transform: `translate3d(${trackX}px, 0, 0)` }}
               >
-                {REEL_ITEMS.map((prize, index) => (
+                {reelItems.map((prize, index) => (
                   <article
                     className={`pw-reel-card pw-reel-card--${prize.kind}${index === reelIndex ? " pw-reel-card--selected" : ""}`}
                     key={`${prize.id}-${index}`}
@@ -299,18 +390,35 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
               className="pw-spin-button"
               type="button"
               onClick={beginSpin}
-              disabled={isSpinning || spinsLeft === 0}
+              disabled={isSpinning || !canSpin || availablePrizes.length === 0}
             >
-              {isSpinning ? <LoaderCircle className="pw-spinner" aria-hidden="true" /> : <Gift aria-hidden="true" />}
+              {isSpinning ? (
+                <LoaderCircle className="pw-spinner" aria-hidden="true" />
+              ) : freeSpinsLeft > 0 ? (
+                <Gift aria-hidden="true" />
+              ) : (
+                <CircleDollarSign aria-hidden="true" />
+              )}
               <span>{primaryButtonLabel}</span>
             </button>
             <p className="pw-balance-caption">
-              {spinsLeft > 0 ? `Останется после вращения: ${Math.max(0, spinsLeft - 1)}` : "Все бесплатные вращения использованы"}
+              {freeSpinsLeft > 0
+                ? `Останется бесплатных вращений: ${Math.max(0, freeSpinsLeft - 1)}`
+                : canPayWithPoints
+                  ? `После вращения останется ${activityPoints - ACTIVITY_POINT_SPIN_COST} очков`
+                  : isFullVersion
+                    ? "Заработайте очки активности в заданиях"
+                    : "Все бесплатные вращения использованы"}
             </p>
+            {isFullVersion && !canSpin && freeSpinsLeft === 0 ? (
+              <button className="pw-earn-button" type="button" onClick={() => setInfoPanel("tasks")}>
+                Перейти к заданиям
+              </button>
+            ) : null}
           </div>
 
           <p className="pw-legal">
-            Нажимая «Крутить бесплатно», вы соглашаетесь с{" "}
+            Нажимая «{freeSpinsLeft > 0 ? "Крутить бесплатно" : `Крутить за ${ACTIVITY_POINT_SPIN_COST} очков`}», вы соглашаетесь с{" "}
             <button type="button" onClick={() => setInfoPanel("rules")}>правилами игры</button>
             {" "}и условиями акции.
           </p>
@@ -355,6 +463,22 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
                 </div>
               ) : null}
 
+              {resultClaimed && selectedPrize.kind === "points" ? (
+                <div className="pw-success-note pw-success-note--points">
+                  <CircleDollarSign aria-hidden="true" />
+                  <span>
+                    Начислено {selectedPrize.pointsAmount} очков активности. Срок жизни — {selectedPrize.pointsTtlDays} дней.
+                  </span>
+                </div>
+              ) : null}
+
+              {resultClaimed && selectedPrize.kind === "physical" ? (
+                <div className="pw-success-note pw-success-note--physical">
+                  <PackageOpen aria-hidden="true" />
+                  <span>Приз сохранён. Инструкцию получения можно повторно открыть во вкладке «Вы выиграли».</span>
+                </div>
+              ) : null}
+
               {!resultClaimed ? (
                 <p className="pw-claim-note">Заберите приз в течение 7 дней. Можно продолжить вращения и вернуться за ним позже.</p>
               ) : null}
@@ -374,8 +498,16 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
       <Dialog open={Boolean(infoPanel)} onOpenChange={(open) => !open && setInfoPanel(null)}>
         <DialogContent className="pw-info-dialog">
           <DialogHeader>
-            <DialogTitle>{infoPanel === "prizes" ? "Призы" : "Правила игры"}</DialogTitle>
-            <DialogDescription className="sr-only">Информация о механике колеса призов</DialogDescription>
+            <DialogTitle>
+              {infoPanel === "prizes" ? "Призы" : infoPanel === "tasks" ? "Задания" : "Правила игры"}
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              {infoPanel === "prizes"
+                ? "Доступные и выигранные призы"
+                : infoPanel === "tasks"
+                  ? "Задания для получения очков активности"
+                  : "Правила механики колеса призов"}
+            </DialogDescription>
           </DialogHeader>
 
           {infoPanel === "prizes" ? (
@@ -404,20 +536,27 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
 
               {prizeTab === "available" ? (
                 <div className="pw-prize-list" role="tabpanel">
-                  {PRIZES.map((prize) => (
+                  {availablePrizes.map((prize) => (
                     <div key={prize.id} className={`pw-prize-row pw-prize-row--${prize.kind}`}>
                       <img src={prize.image} alt="" />
                       <span>
                         <strong>{prize.title}</strong>
-                        <small>{prize.kind === "bonus" ? "Бонусы" : "Промокод"}</small>
+                        <small>{PRIZE_KIND_LABELS[prize.kind]}</small>
                       </span>
                     </div>
                   ))}
+                  {availablePrizes.length === 0 ? (
+                    <div className="pw-empty-state">
+                      <Gift aria-hidden="true" />
+                      <strong>Доступных призов сейчас нет</strong>
+                      <span>Новые вращения не списываются, пока пул пуст.</span>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="pw-win-list" role="tabpanel">
                   {wonPrizes.map((item) => (
-                    item.claimed && item.prize.kind === "promo" ? (
+                    item.claimed && (item.prize.kind === "promo" || item.prize.kind === "physical") ? (
                       <button
                         type="button"
                         key={item.claimId}
@@ -433,13 +572,16 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
                         }}
                       >
                         <img src={item.prize.image} alt="" />
-                        <span><strong>{item.prize.title}</strong><small>Промокод получен</small></span>
+                        <span>
+                          <strong>{item.prize.title}</strong>
+                          <small>{item.prize.kind === "promo" ? "Промокод получен" : "Инструкция сохранена"}</small>
+                        </span>
                         <b>Открыть</b>
                       </button>
                     ) : item.claimed ? (
                       <div key={item.claimId} className={`pw-prize-row pw-prize-row--${item.prize.kind}`}>
                         <img src={item.prize.image} alt="" />
-                        <span><strong>{item.prize.title}</strong><small>Получен</small></span>
+                        <span><strong>{item.prize.title}</strong><small>Получен · {PRIZE_KIND_LABELS[item.prize.kind]}</small></span>
                         <Check aria-label="Получен" />
                       </div>
                     ) : (
@@ -478,13 +620,45 @@ export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) 
           {infoPanel === "rules" ? (
             <div className="pw-rules">
               <p>Каждому авторизованному пользователю один раз доступны 5 бесплатных вращений.</p>
-              <p>Каждое вращение гарантированно определяет один активный приз. Один и тот же приз может выпасть несколько раз.</p>
+              {isFullVersion ? <p>После бесплатных вращений каждое новое стоит 10 очков активности.</p> : null}
+              <p>Каждое вращение гарантированно определяет один доступный приз. Возможность повторного выигрыша зависит от настроек приза.</p>
               <p>Выигранный приз нужно получить кнопкой «Забрать приз» в течение 7 дней. Незабранные призы сохраняются во вкладке «Вы выиграли» и не ограничивают следующие вращения.</p>
-              <p>В MVP призами являются бонусы и промокоды. Вероятности выпадения пользователю не показываются.</p>
+              <p>
+                {isFullVersion
+                  ? "Призами могут быть бонусы, промокоды, очки активности и физические товары. Вероятности выпадения пользователю не показываются."
+                  : "В MVP призами являются бонусы и промокоды. Вероятности выпадения пользователю не показываются."}
+              </p>
+            </div>
+          ) : null}
+
+          {infoPanel === "tasks" ? (
+            <div className="pw-tasks-panel">
+              <p>Выполняйте задания, чтобы получать очки активности для новых вращений.</p>
+              <div className="pw-task-row">
+                <ListChecks aria-hidden="true" />
+                <span><strong>Оформить заказ</strong><small>Награда: 20 очков активности</small></span>
+                <b>+20</b>
+              </div>
+              <div className="pw-task-row">
+                <Sparkles aria-hidden="true" />
+                <span><strong>Посетить подборку недели</strong><small>Награда: 10 очков активности</small></span>
+                <b>+10</b>
+              </div>
+              <button className="pw-modal-action" type="button" onClick={() => setInfoPanel(null)}>
+                Вернуться к колесу
+              </button>
             </div>
           ) : null}
         </DialogContent>
       </Dialog>
     </div>
   )
+}
+
+export function PrizeWheelMvpPrototype({ onBack }: PrizeWheelMvpPrototypeProps) {
+  return <PrizeWheelPrototype version="mvp" onBack={onBack} />
+}
+
+export function PrizeWheelFullPrototype({ onBack }: PrizeWheelMvpPrototypeProps) {
+  return <PrizeWheelPrototype version="full" onBack={onBack} />
 }
