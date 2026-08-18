@@ -139,6 +139,7 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
   const reelViewportRef = useRef<HTMLDivElement | null>(null)
   const reelFirstCardRef = useRef<HTMLElement | null>(null)
   const spinTimeoutRef = useRef<number | null>(null)
+  const reelIndexRef = useRef(INITIAL_REEL_INDEX)
 
   const [freeSpinsLeft, setFreeSpinsLeft] = useState(initialFreeSpins)
   const [activityPoints, setActivityPoints] = useState(isFullVersion ? FULL_INITIAL_ACTIVITY_POINTS : 0)
@@ -147,6 +148,7 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
   const [trackX, setTrackX] = useState(0)
   const [trackReady, setTrackReady] = useState(false)
   const [instantMove, setInstantMove] = useState(true)
+  const [isIdleScrolling, setIsIdleScrolling] = useState(false)
   const [isSpinning, setIsSpinning] = useState(false)
   const [selectedPrize, setSelectedPrize] = useState<Prize | null>(null)
   const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null)
@@ -188,6 +190,71 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
   }, [availablePrizes.length, reelIndex])
 
   useEffect(() => {
+    reelIndexRef.current = reelIndex
+  }, [reelIndex])
+
+  useEffect(() => {
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    const shouldAutoScroll = trackReady
+      && !prefersReducedMotion
+      && !isSpinning
+      && !resultOpen
+      && infoPanel === null
+      && canSpin
+      && availablePrizes.length > 1
+
+    if (!shouldAutoScroll) {
+      setIsIdleScrolling(false)
+      return
+    }
+
+    let intervalId: number | null = null
+    let firstFrameId: number | null = null
+    let secondFrameId: number | null = null
+
+    const moveToNextPrize = () => {
+      const prizeCount = availablePrizes.length
+      const loopStart = prizeCount * 2
+      const loopEnd = prizeCount * 4
+
+      if (reelIndexRef.current >= loopEnd) {
+        setInstantMove(true)
+        reelIndexRef.current = loopStart
+        setReelIndex(loopStart)
+
+        firstFrameId = window.requestAnimationFrame(() => {
+          secondFrameId = window.requestAnimationFrame(() => {
+            const nextIndex = loopStart + 1
+            setInstantMove(false)
+            reelIndexRef.current = nextIndex
+            setReelIndex(nextIndex)
+          })
+        })
+        return
+      }
+
+      const nextIndex = reelIndexRef.current + 1
+      setInstantMove(false)
+      reelIndexRef.current = nextIndex
+      setReelIndex(nextIndex)
+    }
+
+    const startTimeoutId = window.setTimeout(() => {
+      setIsIdleScrolling(true)
+      moveToNextPrize()
+      intervalId = window.setInterval(moveToNextPrize, 1750)
+    }, 850)
+
+    return () => {
+      window.clearTimeout(startTimeoutId)
+      if (intervalId !== null) window.clearInterval(intervalId)
+      if (firstFrameId !== null) window.cancelAnimationFrame(firstFrameId)
+      if (secondFrameId !== null) window.cancelAnimationFrame(secondFrameId)
+      setIsIdleScrolling(false)
+    }
+  }, [availablePrizes.length, canSpin, infoPanel, isSpinning, resultOpen, trackReady])
+
+  useEffect(() => {
     return () => {
       if (spinTimeoutRef.current) window.clearTimeout(spinTimeoutRef.current)
     }
@@ -209,6 +276,7 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
     setSelectedPrize(null)
     setSelectedPromoCode(null)
     setResultClaimed(false)
+    setIsIdleScrolling(false)
     setIsSpinning(true)
     setInstantMove(true)
     setReelIndex(resetIndex)
@@ -278,6 +346,7 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
     setSpinCount(0)
     setReelIndex(INITIAL_REEL_INDEX)
     setInstantMove(true)
+    setIsIdleScrolling(false)
     setIsSpinning(false)
     setSelectedPrize(null)
     setSelectedClaimId(null)
@@ -354,13 +423,13 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
             </p>
           </div>
 
-          <section className="pw-reel-shell" aria-label="Лента призов">
+          <section className={`pw-reel-shell${isIdleScrolling ? " pw-reel-shell--idle" : ""}`} aria-label="Лента призов">
             <div className="pw-selector" aria-hidden="true">
               <ChevronDown />
             </div>
             <div className="pw-reel-viewport" ref={reelViewportRef}>
               <div
-                className={`pw-reel-track${instantMove ? " pw-reel-track--instant" : ""}${trackReady ? " pw-reel-track--ready" : ""}`}
+                className={`pw-reel-track${isIdleScrolling ? " pw-reel-track--idle" : ""}${instantMove ? " pw-reel-track--instant" : ""}${trackReady ? " pw-reel-track--ready" : ""}`}
                 style={{ transform: `translate3d(${trackX}px, 0, 0)` }}
               >
                 {reelItems.map((prize, index) => (
