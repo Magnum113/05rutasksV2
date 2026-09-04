@@ -1,11 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react"
 import {
+  AlertCircle,
   ArrowUpRight,
   ArrowLeft,
+  CalendarDays,
   Check,
+  ChevronLeft,
   ChevronDown,
   CircleDollarSign,
   Clipboard,
+  Clock3,
   Gift,
   ListChecks,
   LoaderCircle,
@@ -27,6 +31,8 @@ type PrizeKind = "bonus" | "promo" | "points" | "physical"
 type InfoPanel = "prizes" | "rules" | "tasks" | null
 type PrizeTab = "available" | "won"
 type PrototypeVersion = "mvp" | "full"
+type RewardStatus = "awaiting_claim" | "issuing" | "issued" | "error" | "expired"
+type ResultSource = "spin" | "won-list"
 
 interface Prize {
   id: string
@@ -37,14 +43,19 @@ interface Prize {
   kind: PrizeKind
   code?: string
   repeatable?: boolean
+  bonusAmount?: number
   pointsAmount?: number
   pointsTtlDays?: number
+  actionLabel?: string
+  actionUrl?: string
 }
 
 interface WonPrize {
   claimId: string
   prize: Prize
-  claimed: boolean
+  status: RewardStatus
+  wonAt: string
+  claimUntil: string
   promoCode?: string
 }
 
@@ -56,6 +67,7 @@ const MVP_PRIZES: Prize[] = [
     description: "Бонусы будут начислены на ваш бонусный счёт после получения приза.",
     image: "/prize-wheel/bonus-100.webp",
     kind: "bonus",
+    bonusAmount: 100,
   },
   {
     id: "promo-10",
@@ -65,6 +77,8 @@ const MVP_PRIZES: Prize[] = [
     image: "/prize-wheel/promo-10.webp",
     kind: "promo",
     code: "WHEEL10-5RU",
+    actionLabel: "Перейти в каталог",
+    actionUrl: "https://05.ru/catalog",
   },
   {
     id: "promo-15",
@@ -74,6 +88,8 @@ const MVP_PRIZES: Prize[] = [
     image: "/prize-wheel/promo-15.webp",
     kind: "promo",
     code: "GIFT15-5RU",
+    actionLabel: "Выбрать товары",
+    actionUrl: "https://05.ru/catalog",
   },
   {
     id: "bonus-10000",
@@ -82,6 +98,7 @@ const MVP_PRIZES: Prize[] = [
     description: "Главный бонусный приз будет начислен на ваш бонусный счёт.",
     image: "/prize-wheel/bonus-10000.webp",
     kind: "bonus",
+    bonusAmount: 10000,
     repeatable: false,
   },
 ]
@@ -113,6 +130,8 @@ const MVP_WIN_SEQUENCE = ["promo-10", "bonus-100", "promo-15", "bonus-100", "bon
 const FULL_WIN_SEQUENCE = ["points-20", "physical-headphones", "promo-10", "bonus-100", "points-20"]
 const INITIAL_REEL_INDEX = 8
 const ANIMATION_MS = 4000
+const ISSUANCE_DEMO_MS = 1800
+const CLAIM_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 const MVP_INITIAL_FREE_SPINS = 5
 const FULL_INITIAL_ACTIVITY_POINTS = 40
 const ACTIVITY_POINT_SPIN_COST = 10
@@ -122,6 +141,54 @@ const PRIZE_KIND_LABELS: Record<PrizeKind, string> = {
   promo: "Промокод",
   points: "Очки активности",
   physical: "Физический приз",
+}
+
+function formatWonDate(value: string) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value))
+}
+
+function formatClaimUntil(value: string) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value))
+}
+
+function getRewardStatusLabel(item: WonPrize) {
+  if (item.status === "awaiting_claim") return "Ожидает получения"
+  if (item.status === "issuing") {
+    if (item.prize.kind === "promo") return "Готовим промокод"
+    if (item.prize.kind === "bonus") return "Начисляем бонусы"
+    return "Выдаём приз"
+  }
+  if (item.status === "issued") {
+    if (item.prize.kind === "promo") return "Промокод получен"
+    if (item.prize.kind === "bonus") return "Бонусы начислены"
+    if (item.prize.kind === "points") return "Очки начислены"
+    return "Приз получен"
+  }
+  if (item.status === "error") {
+    if (item.prize.kind === "promo") return "Не удалось подготовить промокод"
+    if (item.prize.kind === "bonus") return "Не удалось начислить бонусы"
+    return "Не удалось получить приз"
+  }
+  return "Срок получения истёк"
+}
+
+function getRewardStatusTone(status: RewardStatus) {
+  if (status === "issued") return "success"
+  if (status === "error") return "error"
+  if (status === "expired") return "muted"
+  if (status === "issuing") return "progress"
+  return "pending"
 }
 
 interface PrizeWheelMvpPrototypeProps {
@@ -140,6 +207,7 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
   const reelViewportRef = useRef<HTMLDivElement | null>(null)
   const reelFirstCardRef = useRef<HTMLElement | null>(null)
   const spinTimeoutRef = useRef<number | null>(null)
+  const issuanceTimeoutRef = useRef<number | null>(null)
   const reelIndexRef = useRef(INITIAL_REEL_INDEX)
 
   const [freeSpinsLeft, setFreeSpinsLeft] = useState(initialFreeSpins)
@@ -155,13 +223,17 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
   const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null)
   const [selectedPromoCode, setSelectedPromoCode] = useState<string | null>(null)
   const [resultOpen, setResultOpen] = useState(false)
-  const [resultClaimed, setResultClaimed] = useState(false)
+  const [resultSource, setResultSource] = useState<ResultSource>("spin")
   const [infoPanel, setInfoPanel] = useState<InfoPanel>(null)
   const [prizeTab, setPrizeTab] = useState<PrizeTab>("available")
   const [wonPrizes, setWonPrizes] = useState<WonPrize[]>([])
   const [copied, setCopied] = useState(false)
 
-  const pendingPrizeCount = wonPrizes.filter((item) => !item.claimed).length
+  const selectedWinning = selectedClaimId
+    ? wonPrizes.find((item) => item.claimId === selectedClaimId) ?? null
+    : null
+  const selectedStatus = selectedWinning?.status ?? "awaiting_claim"
+  const pendingPrizeCount = wonPrizes.filter((item) => item.status === "awaiting_claim").length
   const userPrizesCount = wonPrizes.length
   const availablePrizes = configuredPrizes.filter((prize) => (
     prize.repeatable !== false || !wonPrizes.some((item) => item.prize.id === prize.id)
@@ -258,6 +330,7 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
   useEffect(() => {
     return () => {
       if (spinTimeoutRef.current) window.clearTimeout(spinTimeoutRef.current)
+      if (issuanceTimeoutRef.current) window.clearTimeout(issuanceTimeoutRef.current)
     }
   }, [])
 
@@ -276,7 +349,7 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
     setCopied(false)
     setSelectedPrize(null)
     setSelectedPromoCode(null)
-    setResultClaimed(false)
+    setResultSource("spin")
     setIsIdleScrolling(false)
     setIsSpinning(true)
     setInstantMove(true)
@@ -291,12 +364,20 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
 
     if (spinTimeoutRef.current) window.clearTimeout(spinTimeoutRef.current)
     spinTimeoutRef.current = window.setTimeout(() => {
+      const wonAt = new Date()
       const claimId = `${winner.id}-${Date.now()}`
       const promoCode = winner.code ? `${winner.code}-${String(spinCount + 1).padStart(2, "0")}` : undefined
       setSelectedPrize(winner)
       setSelectedClaimId(claimId)
       setSelectedPromoCode(promoCode ?? null)
-      setWonPrizes((items) => [{ claimId, prize: winner, claimed: false, promoCode }, ...items])
+      setWonPrizes((items) => [{
+        claimId,
+        prize: winner,
+        status: "awaiting_claim",
+        wonAt: wonAt.toISOString(),
+        claimUntil: new Date(wonAt.getTime() + CLAIM_WINDOW_MS).toISOString(),
+        promoCode,
+      }, ...items])
       if (useFreeSpin) {
         setFreeSpinsLeft((value) => Math.max(0, value - 1))
       } else {
@@ -310,24 +391,54 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
   }
 
   function claimPrize() {
-    if (!selectedPrize || !selectedClaimId || resultClaimed) return
+    if (!selectedPrize || !selectedClaimId || selectedStatus !== "awaiting_claim") return
 
+    setCopied(false)
     setWonPrizes((items) => items.map((item) => (
-      item.claimId === selectedClaimId ? { ...item, claimed: true } : item
+      item.claimId === selectedClaimId ? { ...item, status: "issuing" } : item
     )))
-    if (selectedPrize.kind === "points" && selectedPrize.pointsAmount) {
-      setActivityPoints((value) => value + selectedPrize.pointsAmount!)
-    }
-    setResultClaimed(true)
+
+    if (issuanceTimeoutRef.current) window.clearTimeout(issuanceTimeoutRef.current)
+    issuanceTimeoutRef.current = window.setTimeout(() => {
+      const issuedPromoCode = selectedPrize.kind === "promo"
+        ? selectedWinning?.promoCode ?? `${selectedPrize.code ?? "WHEEL-5RU"}-${selectedClaimId.startsWith("demo-") ? "DEMO" : selectedClaimId.slice(-4).toUpperCase()}`
+        : undefined
+      setWonPrizes((items) => items.map((item) => (
+        item.claimId === selectedClaimId ? { ...item, status: "issued", promoCode: issuedPromoCode ?? item.promoCode } : item
+      )))
+      if (issuedPromoCode) setSelectedPromoCode(issuedPromoCode)
+      if (selectedPrize.kind === "points" && selectedPrize.pointsAmount) {
+        setActivityPoints((value) => value + selectedPrize.pointsAmount!)
+      }
+      issuanceTimeoutRef.current = null
+    }, ISSUANCE_DEMO_MS)
   }
 
-  function continueAfterClaim() {
+  function closeResult() {
     setResultOpen(false)
     setSelectedPrize(null)
     setSelectedClaimId(null)
     setSelectedPromoCode(null)
-    setResultClaimed(false)
+    setResultSource("spin")
     setCopied(false)
+  }
+
+  function returnToWonPrizes() {
+    closeResult()
+    setPrizeTab("won")
+    setInfoPanel("prizes")
+  }
+
+  function openWonPrize(item: WonPrize) {
+    if (item.status === "expired") return
+
+    setSelectedPrize(item.prize)
+    setSelectedClaimId(item.claimId)
+    setSelectedPromoCode(item.status === "issued" ? item.promoCode ?? item.prize.code ?? null : null)
+    setResultSource("won-list")
+    setCopied(false)
+    setInfoPanel(null)
+    setResultOpen(true)
   }
 
   async function copyPromoCode() {
@@ -342,6 +453,7 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
 
   function resetDemo() {
     if (spinTimeoutRef.current) window.clearTimeout(spinTimeoutRef.current)
+    if (issuanceTimeoutRef.current) window.clearTimeout(issuanceTimeoutRef.current)
     setFreeSpinsLeft(initialFreeSpins)
     setActivityPoints(isFullVersion ? FULL_INITIAL_ACTIVITY_POINTS : 0)
     setSpinCount(0)
@@ -353,10 +465,54 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
     setSelectedClaimId(null)
     setSelectedPromoCode(null)
     setResultOpen(false)
-    setResultClaimed(false)
+    setResultSource("spin")
     setInfoPanel(null)
     setPrizeTab("available")
     setWonPrizes([])
+    setCopied(false)
+  }
+
+  function showAllMvpStates() {
+    if (issuanceTimeoutRef.current) window.clearTimeout(issuanceTimeoutRef.current)
+    const now = Date.now()
+    const prizeById = (id: string) => configuredPrizes.find((prize) => prize.id === id) ?? configuredPrizes[0]
+    const buildItem = (
+      claimId: string,
+      prizeId: string,
+      status: RewardStatus,
+      minutesAgo: number,
+      promoCode?: string,
+    ): WonPrize => {
+      const wonAt = new Date(now - minutesAgo * 60 * 1000)
+      return {
+        claimId,
+        prize: prizeById(prizeId),
+        status,
+        wonAt: wonAt.toISOString(),
+        claimUntil: new Date(wonAt.getTime() + CLAIM_WINDOW_MS).toISOString(),
+        promoCode,
+      }
+    }
+
+    setWonPrizes([
+      buildItem("demo-awaiting", "promo-10", "awaiting_claim", 12),
+      buildItem("demo-bonus-issuing", "bonus-100", "issuing", 24),
+      buildItem("demo-promo-issuing", "promo-15", "issuing", 31),
+      buildItem("demo-bonus-issued", "bonus-100", "issued", 48),
+      buildItem("demo-promo-issued", "promo-15", "issued", 65, "GIFT15-5RU-DEMO"),
+      buildItem("demo-bonus-error", "bonus-100", "error", 82),
+      buildItem("demo-promo-error", "promo-10", "error", 96),
+      {
+        ...buildItem("demo-expired", "promo-15", "expired", 8 * 24 * 60),
+        claimUntil: new Date(now - 24 * 60 * 60 * 1000).toISOString(),
+      },
+    ])
+    setSelectedPrize(null)
+    setSelectedClaimId(null)
+    setSelectedPromoCode(null)
+    setResultOpen(false)
+    setPrizeTab("won")
+    setInfoPanel("prizes")
     setCopied(false)
   }
 
@@ -421,7 +577,7 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
 
         <main className="pw-main">
           <div className="pw-intro">
-            <h1>{isFullVersion ? "Выполняйте задания и обменивайте очки на призы" : "Крутите колесо — приз уже ждёт"}</h1>
+            <h1>{isFullVersion ? "Выполняйте задания и обменивайте очки на призы" : "Крутите колесо и выигрывайте призы."}</h1>
             <p>
               {isFullVersion
                 ? "Каждое вращение стоит 10 очков активности. Зарабатывайте очки, выполняя задания."
@@ -499,17 +655,36 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
           </p>
         </main>
 
-        <button className="pw-reset" type="button" onClick={resetDemo}>
-          <RotateCcw aria-hidden="true" /> Сбросить демо
-        </button>
+        <div className="pw-demo-tools" aria-label="Управление прототипом">
+          {!isFullVersion ? (
+            <button type="button" onClick={showAllMvpStates}>
+              <ListChecks aria-hidden="true" /> Показать состояния
+            </button>
+          ) : null}
+          <button type="button" onClick={resetDemo}>
+            <RotateCcw aria-hidden="true" /> Сбросить демо
+          </button>
+        </div>
       </div>
 
-      <Dialog open={resultOpen} onOpenChange={setResultOpen}>
+      <Dialog open={resultOpen} onOpenChange={(open) => !open && closeResult()}>
         <DialogContent className="pw-result-dialog">
-          {selectedPrize ? (
+          {selectedPrize && selectedWinning ? (
             <>
+              {resultSource === "won-list" ? (
+                <button className="pw-result-back" type="button" onClick={returnToWonPrizes}>
+                  <ChevronLeft aria-hidden="true" /> Назад к призам
+                </button>
+              ) : null}
+
               <DialogHeader className="pw-result-header">
-                <span className="pw-result-kicker">{resultClaimed ? "Приз ваш" : "Поздравляем!"}</span>
+                <span className="pw-result-kicker">
+                  {selectedStatus === "awaiting_claim"
+                    ? "Поздравляем!"
+                    : selectedStatus === "error"
+                      ? "Приз сохранён"
+                      : getRewardStatusLabel(selectedWinning)}
+                </span>
                 <DialogTitle>{selectedPrize.title}</DialogTitle>
                 <DialogDescription>{selectedPrize.description}</DialogDescription>
               </DialogHeader>
@@ -518,27 +693,51 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
                 <img src={selectedPrize.image} alt={selectedPrize.title} />
               </div>
 
-              {resultClaimed && selectedPrize.kind === "promo" && selectedPromoCode ? (
+              {selectedStatus === "awaiting_claim" ? (
+                <div className="pw-claim-note">
+                  <CalendarDays aria-hidden="true" />
+                  <span>
+                    <strong>Забрать до {formatClaimUntil(selectedWinning.claimUntil)}</strong>
+                    <small>Можно закрыть окно, продолжить вращения и вернуться за призом позже.</small>
+                  </span>
+                </div>
+              ) : null}
+
+              {selectedStatus === "issuing" ? (
+                <div className="pw-result-status pw-result-status--progress" role="status" aria-live="polite">
+                  <LoaderCircle className="pw-spinner" aria-hidden="true" />
+                  <span>
+                    <strong>{getRewardStatusLabel(selectedWinning)}</strong>
+                    <small>Можно закрыть окно — приз сохранён в разделе «Призы».</small>
+                  </span>
+                </div>
+              ) : null}
+
+              {selectedStatus === "issued" && selectedPrize.kind === "promo" && selectedPromoCode ? (
                 <div className="pw-code-box">
                   <span>Ваш промокод</span>
                   <div>
                     <strong>{selectedPromoCode}</strong>
                     <button type="button" onClick={copyPromoCode} aria-label="Скопировать промокод">
                       {copied ? <Check aria-hidden="true" /> : <Clipboard aria-hidden="true" />}
+                      <span>{copied ? "Скопировано" : "Скопировать"}</span>
                     </button>
                   </div>
-                  <small>{copied ? "Промокод скопирован" : "Нажмите, чтобы скопировать"}</small>
+                  <small aria-live="polite">{copied ? "Промокод скопирован" : "Скопируйте код и примените его при оформлении заказа."}</small>
                 </div>
               ) : null}
 
-              {resultClaimed && selectedPrize.kind === "bonus" ? (
+              {selectedStatus === "issued" && selectedPrize.kind === "bonus" ? (
                 <div className="pw-success-note">
                   <Check aria-hidden="true" />
-                  <span>Бонусы приняты к начислению на ваш бонусный счёт.</span>
+                  <span>
+                    <strong>Бонусы начислены</strong>
+                    <small>На бонусный счёт зачислено {selectedPrize.bonusAmount?.toLocaleString("ru-RU")} бонусов.</small>
+                  </span>
                 </div>
               ) : null}
 
-              {resultClaimed && selectedPrize.kind === "points" ? (
+              {selectedStatus === "issued" && selectedPrize.kind === "points" ? (
                 <div className="pw-success-note pw-success-note--points">
                   <CircleDollarSign aria-hidden="true" />
                   <span>
@@ -547,24 +746,58 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
                 </div>
               ) : null}
 
-              {resultClaimed && selectedPrize.kind === "physical" ? (
+              {selectedStatus === "issued" && selectedPrize.kind === "physical" ? (
                 <div className="pw-success-note pw-success-note--physical">
                   <PackageOpen aria-hidden="true" />
                   <span>Приз сохранён. Инструкцию получения можно повторно открыть во вкладке «Вы выиграли».</span>
                 </div>
               ) : null}
 
-              {!resultClaimed ? (
-                <p className="pw-claim-note">Заберите приз в течение 7 дней. Можно продолжить вращения и вернуться за ним позже.</p>
+              {selectedStatus === "error" ? (
+                <div className="pw-result-status pw-result-status--error" role="alert">
+                  <AlertCircle aria-hidden="true" />
+                  <span>
+                    <strong>{getRewardStatusLabel(selectedWinning)}</strong>
+                    <small>Выигрыш сохранён. Обратитесь в поддержку — мы поможем получить этот приз.</small>
+                  </span>
+                </div>
               ) : null}
 
-              <button
-                className="pw-modal-action"
-                type="button"
-                onClick={resultClaimed ? continueAfterClaim : claimPrize}
-              >
-                {resultClaimed ? "Продолжить" : "Забрать приз"}
-              </button>
+              {selectedStatus === "expired" ? (
+                <div className="pw-result-status pw-result-status--muted">
+                  <Clock3 aria-hidden="true" />
+                  <span>
+                    <strong>Срок получения истёк</strong>
+                    <small>Этот приз больше нельзя забрать.</small>
+                  </span>
+                </div>
+              ) : null}
+
+              {selectedStatus === "issued" && selectedPrize.actionLabel && selectedPrize.actionUrl ? (
+                <a className="pw-modal-action pw-modal-action--secondary" href={selectedPrize.actionUrl} target="_blank" rel="noreferrer">
+                  {selectedPrize.actionLabel} <ArrowUpRight aria-hidden="true" />
+                </a>
+              ) : null}
+
+              {selectedStatus === "error" ? (
+                <a className="pw-modal-action" href="https://05.ru/contacts" target="_blank" rel="noreferrer">
+                  Обратиться в поддержку <ArrowUpRight aria-hidden="true" />
+                </a>
+              ) : null}
+
+              {selectedStatus === "awaiting_claim" ? (
+                <button className="pw-modal-action" type="button" onClick={claimPrize}>
+                  Забрать приз
+                </button>
+              ) : (
+                <button
+                  className="pw-modal-action pw-modal-action--quiet"
+                  type="button"
+                  onClick={closeResult}
+                >
+                  {resultSource === "won-list" ? "Закрыть" : "Продолжить"}
+                </button>
+              )}
             </>
           ) : null}
         </DialogContent>
@@ -630,56 +863,39 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
                 </div>
               ) : (
                 <div className="pw-win-list" role="tabpanel">
-                  {wonPrizes.map((item) => (
-                    item.claimed && (item.prize.kind === "promo" || item.prize.kind === "physical") ? (
-                      <button
-                        type="button"
-                        key={item.claimId}
-                        className="pw-prize-row pw-prize-row--promo"
-                        onClick={() => {
-                          setSelectedPrize(item.prize)
-                          setSelectedClaimId(item.claimId)
-                          setSelectedPromoCode(item.promoCode ?? item.prize.code ?? null)
-                          setResultClaimed(true)
-                          setCopied(false)
-                          setInfoPanel(null)
-                          setResultOpen(true)
-                        }}
-                      >
+                  {wonPrizes.map((item) => {
+                    const statusLabel = getRewardStatusLabel(item)
+                    const actionLabel = item.status === "awaiting_claim" ? "Забрать" : "Открыть"
+                    const rowContent = (
+                      <>
                         <img src={item.prize.image} alt="" />
-                        <span>
+                        <span className="pw-win-copy">
                           <strong>{item.prize.title}</strong>
-                          <small>{item.prize.kind === "promo" ? "Промокод получен" : "Инструкция сохранена"}</small>
+                          <small className={`pw-status pw-status--${getRewardStatusTone(item.status)}`}>{statusLabel}</small>
+                          <small className="pw-win-date">Выигран {formatWonDate(item.wonAt)}</small>
+                          {item.status === "awaiting_claim" ? (
+                            <small className="pw-win-deadline">Забрать до {formatClaimUntil(item.claimUntil)}</small>
+                          ) : null}
                         </span>
-                        <b>Открыть</b>
-                      </button>
-                    ) : item.claimed ? (
-                      <div key={item.claimId} className={`pw-prize-row pw-prize-row--${item.prize.kind}`}>
-                        <img src={item.prize.image} alt="" />
-                        <span><strong>{item.prize.title}</strong><small>Получен · {PRIZE_KIND_LABELS[item.prize.kind]}</small></span>
-                        <Check aria-label="Получен" />
+                        {item.status === "expired" ? <span className="pw-win-no-action">Без действий</span> : <b>{actionLabel}</b>}
+                      </>
+                    )
+
+                    return item.status === "expired" ? (
+                      <div key={item.claimId} className={`pw-prize-row pw-prize-row--${item.prize.kind} pw-prize-row--expired`}>
+                        {rowContent}
                       </div>
                     ) : (
                       <button
                         type="button"
                         key={item.claimId}
                         className={`pw-prize-row pw-prize-row--${item.prize.kind}`}
-                        onClick={() => {
-                          setSelectedPrize(item.prize)
-                          setSelectedClaimId(item.claimId)
-                          setSelectedPromoCode(item.promoCode ?? null)
-                          setResultClaimed(false)
-                          setCopied(false)
-                          setInfoPanel(null)
-                          setResultOpen(true)
-                        }}
+                        onClick={() => openWonPrize(item)}
                       >
-                        <img src={item.prize.image} alt="" />
-                        <span><strong>{item.prize.title}</strong><small>Ожидает получения</small></span>
-                        <b>Забрать</b>
+                        {rowContent}
                       </button>
                     )
-                  ))}
+                  })}
                   {wonPrizes.length === 0 ? (
                     <div className="pw-empty-state">
                       <Gift aria-hidden="true" />
@@ -702,7 +918,7 @@ function PrizeWheelPrototype({ onBack, version }: PrizeWheelPrototypeProps) {
               <p>
                 {isFullVersion
                   ? "Призами могут быть бонусы, промокоды, очки активности и физические товары. Вероятности выпадения пользователю не показываются."
-                  : "В MVP призами являются бонусы и промокоды. Вероятности выпадения пользователю не показываются."}
+                  : "Призами могут быть бонусы и промокоды. Вероятности выпадения пользователю не показываются."}
               </p>
             </div>
           ) : null}
