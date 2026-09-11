@@ -12,6 +12,7 @@ export interface PersonalTemplate {
   id: string
   status: PersonalTemplateStatus
   name: string
+  description: string
   key: string
   discount_id: string | null
   ttl_days: number // срок от момента выдачи (дней); срок всегда относительный
@@ -73,7 +74,8 @@ export const MOCK_PERSONAL_TEMPLATES: PersonalTemplate[] = [
   {
     id: "tpl_gift_7d",
     status: "active",
-    name: "Подарок за 7 дней",
+    name: "Подарок на первый заказ",
+    description: "Скидка 700 ₽ на первый заказ в приложении.",
     key: "gift_7d",
     discount_id: "discount_1022",
     ttl_days: 7,
@@ -88,7 +90,8 @@ export const MOCK_PERSONAL_TEMPLATES: PersonalTemplate[] = [
   {
     id: "tpl_cart_48h",
     status: "active",
-    name: "Брошенная корзина 48 часов",
+    name: "Ваша корзина ждёт",
+    description: "Скидка 10 % на выбранные смартфоны при заказе от 5 000 ₽.",
     key: "cart_48h",
     discount_id: "discount_1007",
     ttl_days: 2,
@@ -103,7 +106,8 @@ export const MOCK_PERSONAL_TEMPLATES: PersonalTemplate[] = [
   {
     id: "tpl_winback_14d",
     status: "inactive",
-    name: "Winback уснувших",
+    name: "Скидка для вас",
+    description: "Скидка 12 % на выбранную технику для дома.",
     key: "winback_14d",
     discount_id: "discount_1098",
     ttl_days: 14,
@@ -118,7 +122,8 @@ export const MOCK_PERSONAL_TEMPLATES: PersonalTemplate[] = [
   {
     id: "tpl_first_order",
     status: "draft",
-    name: "Welcome за первый заказ",
+    name: "Промокод на первый заказ",
+    description: "Скидка 700 ₽ на первый заказ в приложении.",
     key: "first_order_welcome",
     discount_id: "discount_1022",
     ttl_days: 7,

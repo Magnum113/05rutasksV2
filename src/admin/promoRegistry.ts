@@ -56,6 +56,8 @@ export interface DiscountEntity {
 export interface PromoCodeEntity {
   id: string
   status: PromoStatus
+  name: string
+  description: string
   code: string
   discount_id: string | null
   start_date: string
@@ -278,6 +280,8 @@ export const MOCK_PROMO_CODES: PromoCodeEntity[] = [
   {
     id: "promo_001",
     status: "active",
+    name: "Скидка на смартфоны",
+    description: "Скидка 10 % на выбранные смартфоны при заказе от 5 000 ₽.",
     code: "SPRINGPHONE",
     discount_id: "discount_1007",
     start_date: "2026-02-10",
@@ -294,6 +298,8 @@ export const MOCK_PROMO_CODES: PromoCodeEntity[] = [
   {
     id: "promo_002",
     status: "active",
+    name: "Подарок на первый заказ",
+    description: "Скидка 700 ₽ на первый заказ в приложении.",
     code: "FIRSTAPP",
     discount_id: "discount_1022",
     start_date: "2026-02-01",
@@ -310,6 +316,8 @@ export const MOCK_PROMO_CODES: PromoCodeEntity[] = [
   {
     id: "promo_003",
     status: "inactive",
+    name: "Скидка на технику для дома",
+    description: "Скидка 12 % на выбранную технику для дома.",
     code: "SMARTSELLER",
     discount_id: "discount_1098",
     start_date: "2026-03-01",
@@ -326,6 +334,8 @@ export const MOCK_PROMO_CODES: PromoCodeEntity[] = [
   {
     id: "promo_004",
     status: "draft",
+    name: "Промокод для новой акции",
+    description: "Описание предложения, которое увидит пользователь.",
     code: "DRAFTNOLINK",
     discount_id: null,
     start_date: "2026-03-10",

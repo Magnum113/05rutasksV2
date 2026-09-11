@@ -26,6 +26,7 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Textarea } from "@/components/ui/textarea"
 
 interface PersonalPromoSectionProps {
   globalSearch: string
@@ -50,6 +51,7 @@ interface IssuedFilters {
 interface TemplateForm {
   status: PersonalTemplateStatus
   name: string
+  description: string
   key: string
   discount_id: string
   ttl_days: string
@@ -81,6 +83,7 @@ function createTemplateForm(): TemplateForm {
   return {
     status: "draft",
     name: "",
+    description: "",
     key: "",
     discount_id: "",
     ttl_days: "7",
@@ -95,6 +98,7 @@ function templateToForm(template: PersonalTemplate): TemplateForm {
   return {
     status: template.status,
     name: template.name,
+    description: template.description,
     key: template.key,
     discount_id: template.discount_id ?? "",
     ttl_days: String(template.ttl_days),
@@ -149,7 +153,7 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
 
   const filteredTemplates = useMemo(() => {
     const rows = templates.filter((item) => {
-      const haystack = `${item.name} ${item.key}`.toLowerCase()
+      const haystack = `${item.name} ${item.description} ${item.key}`.toLowerCase()
 
       if (query && !haystack.includes(query)) {
         return false
@@ -237,6 +241,10 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
       addError("name", "Название обязательно")
     }
 
+    if (!form.description.trim()) {
+      addError("description", "Описание обязательно")
+    }
+
     const key = form.key.trim()
     if (!key) {
       addError("key", "Ключ (key) обязателен")
@@ -287,6 +295,7 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
     const payload = {
       status: form.status,
       name: form.name.trim(),
+      description: form.description.trim(),
       key: form.key.trim(),
       discount_id: form.discount_id ? form.discount_id : null,
       ttl_days: Number(form.ttl_days),
@@ -355,7 +364,7 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    <FieldBlock label="Поиск (название / key)">
+                    <FieldBlock label="Поиск (название / описание / key)">
                       <Input
                         value={templateFilters.search}
                         onChange={(event) => setTemplateFilters((prev) => ({ ...prev, search: event.target.value }))}
@@ -591,11 +600,15 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
                   onChange={(value) => setField("status", value as PersonalTemplateStatus)}
                 />
 
-                <FieldBlock label="Название *" error={fieldErrors.name}>
+                <FieldBlock
+                  label="Название для пользователя *"
+                  error={fieldErrors.name}
+                  hint="Показывается в разделе «Мои промокоды»"
+                >
                   <Input
                     value={form.name}
                     onChange={(event) => setField("name", event.target.value)}
-                    placeholder="Подарок за 7 дней"
+                    placeholder="Подарок на первый заказ"
                   />
                 </FieldBlock>
 
@@ -606,6 +619,21 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
                     placeholder="gift_7d"
                   />
                 </FieldBlock>
+
+                <div className="lg:col-span-3">
+                  <FieldBlock
+                    label="Описание для пользователя *"
+                    error={fieldErrors.description}
+                    hint="Показывается под названием в разделе «Мои промокоды»"
+                  >
+                    <Textarea
+                      value={form.description}
+                      onChange={(event) => setField("description", event.target.value)}
+                      placeholder="Коротко опишите выгоду и важные условия предложения"
+                      className="min-h-24"
+                    />
+                  </FieldBlock>
+                </div>
               </div>
             </CardContent>
           </Card>

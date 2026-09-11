@@ -120,6 +120,8 @@ interface DiscountForm {
 
 interface PromoForm {
   status: PromoStatus
+  name: string
+  description: string
   code: string
   discount_id: string
   start_date: string
@@ -182,6 +184,8 @@ function createPromoForm(prefilledDiscountId?: string): PromoForm {
 
   return {
     status: "draft",
+    name: "",
+    description: "",
     code: "",
     discount_id: prefilledDiscountId ?? "",
     start_date: now.toISOString().slice(0, 10),
@@ -220,6 +224,8 @@ function discountToForm(discount: DiscountEntity): DiscountForm {
 function promoToForm(promo: PromoCodeEntity): PromoForm {
   return {
     status: promo.status,
+    name: promo.name,
+    description: promo.description,
     code: promo.code,
     discount_id: promo.discount_id ?? "",
     start_date: promo.start_date,
@@ -430,15 +436,18 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
 
       if (query) {
         const haystack =
-          `${item.code} ${item.discount_id ?? ""} ${linkedDiscount?.name ?? ""} ${linkedDiscount?.status ?? ""}`.toLowerCase()
+          `${item.name} ${item.description} ${item.code} ${item.discount_id ?? ""} ${linkedDiscount?.name ?? ""} ${linkedDiscount?.status ?? ""}`.toLowerCase()
 
         if (!haystack.includes(query)) {
           return false
         }
       }
 
-      if (promoFilters.code && !item.code.toLowerCase().includes(promoFilters.code.toLowerCase())) {
-        return false
+      if (promoFilters.code) {
+        const search = promoFilters.code.toLowerCase()
+        if (!`${item.name} ${item.code}`.toLowerCase().includes(search)) {
+          return false
+        }
       }
 
       if (promoFilters.status !== "all" && item.status !== promoFilters.status) {
@@ -778,6 +787,14 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
       errors.push(message)
     }
 
+    if (!promoForm.name.trim()) {
+      addError("name", "Поле «Название для пользователя» обязательно")
+    }
+
+    if (!promoForm.description.trim()) {
+      addError("description", "Поле «Описание для пользователя» обязательно")
+    }
+
     if (!promoForm.code.trim()) {
       addError("code", "Поле «Код промокода» обязательно")
     }
@@ -842,6 +859,8 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
 
     const payload = {
       status: promoForm.status,
+      name: promoForm.name.trim(),
+      description: promoForm.description.trim(),
       code: promoForm.code.trim(),
       discount_id: promoForm.discount_id ? promoForm.discount_id : null,
       start_date: promoForm.start_date,
@@ -1436,11 +1455,11 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <FieldBlock label="Код промокода">
+                    <FieldBlock label="Название или код">
                       <Input
                         value={promoFilters.code}
                         onChange={(event) => setPromoFilters((prev) => ({ ...prev, code: event.target.value }))}
-                        placeholder="SPRINGPHONE"
+                        placeholder="Скидка на смартфоны"
                       />
                     </FieldBlock>
 
@@ -1514,7 +1533,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Код</TableHead>
+                          <TableHead>Название / код</TableHead>
                           <TableHead>Статус</TableHead>
                           <TableHead>Период действия</TableHead>
                           <TableHead>Режим использования</TableHead>
@@ -1540,7 +1559,10 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
 
                             return (
                               <TableRow key={item.id}>
-                                <TableCell className="font-semibold">{item.code}</TableCell>
+                                <TableCell>
+                                  <p className="font-semibold">{item.name}</p>
+                                  <p className="font-mono text-xs text-muted-foreground">{item.code}</p>
+                                </TableCell>
                                 <TableCell>
                                   <Badge variant={PROMO_STATUS_VARIANT[item.status]}>
                                     {PROMO_STATUS_LABELS[item.status]}
@@ -1619,6 +1641,14 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                       onChange={(value) => setPromoField("status", value as PromoStatus)}
                     />
 
+                    <FieldBlock label="Название для пользователя *" error={promoFieldErrors.name}>
+                      <Input
+                        value={promoForm.name}
+                        onChange={(event) => setPromoField("name", event.target.value)}
+                        placeholder="Скидка на смартфоны"
+                      />
+                    </FieldBlock>
+
                     <FieldBlock label="Код промокода *" error={promoFieldErrors.code}>
                       <Input
                         value={promoForm.code}
@@ -1626,6 +1656,17 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                         placeholder="SPRINGPHONE"
                       />
                     </FieldBlock>
+
+                    <div className="lg:col-span-3">
+                      <FieldBlock label="Описание для пользователя *" error={promoFieldErrors.description}>
+                        <Textarea
+                          value={promoForm.description}
+                          onChange={(event) => setPromoField("description", event.target.value)}
+                          placeholder="Коротко опишите выгоду и важные условия предложения"
+                          className="min-h-24"
+                        />
+                      </FieldBlock>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
