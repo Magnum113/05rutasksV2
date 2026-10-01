@@ -219,19 +219,6 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
     return () => window.clearInterval(interval)
   }, [])
 
-  useEffect(() => {
-    const entry = profileEntryRef.current
-    if (!entry) return
-    const observer = new IntersectionObserver(([item]) => {
-      if (item.isIntersecting) {
-        setProfileEntryVisible(true)
-        observer.disconnect()
-      }
-    }, { threshold: 0.5 })
-    observer.observe(entry)
-    return () => observer.disconnect()
-  }, [view])
-
   const discountById = useMemo(() => new Map(discounts.map((discount) => [discount.id, discount])), [discounts])
   const segmentPhones = useMemo(() => getSegmentPhones(externalOffer.phones), [externalOffer.phones])
   const offerInPeriod = externalOffer.startDate <= dateAfter(0) && externalOffer.endDate >= dateAfter(0)
@@ -268,16 +255,26 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
     const query = globalSearch.trim().toLowerCase()
     return !query || `${entry.title} ${entry.description} ${entry.code} ${entry.external?.serviceName ?? ""}`.toLowerCase().includes(query)
   }).sort((a, b) => expiryTime(a.expiresAt) - expiryTime(b.expiresAt))
-  const profileTitle = !authorized ? "Войдите, чтобы увидеть промокоды"
-    : demoState === "loading" ? "Загружаем промокоды"
-    : demoState === "error" ? "Не удалось загрузить промокоды"
-    : demoState === "empty" || entries.length === 0 ? "Пока нет действующих промокодов"
-    : `У вас ${entries.length} ${pluralForm(entries.length, "промокод", "промокода", "промокодов")}`
-  const profileHint = !authorized ? "Откройте раздел, чтобы войти"
-    : demoState === "error" ? "Откройте раздел и попробуйте ещё раз"
-      : demoState === "loading" ? "Проверяем доступные предложения"
-        : demoState === "ready" && entries.length > 0 ? profileExpiryText(entries, now)
-          : "Откройте раздел «Мои промокоды»"
+  const showProfileEntry = authorized && demoState === "ready" && entries.length > 0
+  const profileTitle = `У вас ${entries.length} ${pluralForm(entries.length, "промокод", "промокода", "промокодов")}`
+  const profileHint = profileExpiryText(entries, now)
+
+  useEffect(() => {
+    if (view !== "client" || !showProfileEntry) {
+      setProfileEntryVisible(false)
+      return
+    }
+    const entry = profileEntryRef.current
+    if (!entry) return
+    const observer = new IntersectionObserver(([item]) => {
+      if (item.isIntersecting) {
+        setProfileEntryVisible(true)
+        observer.disconnect()
+      }
+    }, { threshold: 0.5 })
+    observer.observe(entry)
+    return () => observer.disconnect()
+  }, [view, showProfileEntry])
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("code")
@@ -377,32 +374,34 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
             </CardContent>
           </Card>
 
-          <section className="mx-auto w-full max-w-5xl" aria-labelledby="profile-preview-title">
+          {showProfileEntry && <section className="mx-auto w-full max-w-5xl" aria-labelledby="profile-preview-title">
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Пример входа из личного кабинета</p>
             <div className="rounded-[28px] border bg-slate-50 p-4 sm:p-6">
               <h3 id="profile-preview-title" className="mb-4 text-xl font-semibold">Личный кабинет</h3>
-              <button
-                ref={profileEntryRef}
-                type="button"
-                className="profile-promo-entry group flex w-full items-center gap-4 rounded-[20px] border border-red-100 bg-white p-4 text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E30614] sm:p-5"
-                onClick={() => {
-                  clientPreviewRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })
-                  clientPreviewRef.current?.focus({ preventScroll: true })
-                }}
-              >
-                <span className={`profile-promo-entry__art relative flex h-14 w-16 shrink-0 items-center justify-center${profileEntryVisible ? " profile-promo-entry__art--visible" : ""}`} aria-hidden="true">
-                  <span className="profile-promo-entry__ticket-back absolute left-3 top-1 h-11 w-11 rotate-[-13deg] rounded-xl bg-[#FFE45C]" />
-                  <span className="profile-promo-entry__ticket-front absolute left-4 top-2 flex h-11 w-11 rotate-[8deg] items-center justify-center rounded-xl bg-[#E30614] text-white shadow-md"><Ticket className="h-6 w-6" strokeWidth={2} /></span>
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-base font-semibold">Мои промокоды</span>
-                  <span className="mt-1 block text-sm font-medium text-slate-900">{profileTitle}</span>
-                  <span className="mt-0.5 block text-sm text-muted-foreground">{profileHint}</span>
-                </span>
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#E30614] transition-colors duration-150 group-hover:bg-red-100" aria-hidden="true"><ChevronRight className="h-5 w-5 transition-transform duration-150 group-hover:translate-x-0.5" /></span>
-              </button>
+              <div className={`profile-promo-entry__reveal${profileEntryVisible ? " profile-promo-entry__reveal--visible" : ""}`}>
+                <button
+                  ref={profileEntryRef}
+                  type="button"
+                  className="profile-promo-entry group flex w-full items-center gap-4 rounded-[20px] border border-red-100 bg-white p-4 text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E30614] sm:p-5"
+                  onClick={() => {
+                    clientPreviewRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })
+                    clientPreviewRef.current?.focus({ preventScroll: true })
+                  }}
+                >
+                  <span className="profile-promo-entry__art relative flex h-14 w-16 shrink-0 items-center justify-center" aria-hidden="true">
+                    <span className="profile-promo-entry__ticket-back absolute left-3 top-1 h-11 w-11 rotate-[-13deg] rounded-xl bg-[#FFE45C]" />
+                    <span className="profile-promo-entry__ticket-front absolute left-4 top-2 flex h-11 w-11 rotate-[8deg] items-center justify-center rounded-xl bg-[#E30614] text-white shadow-md"><Ticket className="h-6 w-6" strokeWidth={2} /></span>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-base font-semibold">Мои промокоды</span>
+                    <span className="mt-1 block text-sm font-medium text-slate-900">{profileTitle}</span>
+                    <span className="mt-0.5 block text-sm text-muted-foreground">{profileHint}</span>
+                  </span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#E30614] transition-colors duration-150 group-hover:bg-red-100" aria-hidden="true"><ChevronRight className="h-5 w-5 transition-transform duration-150 group-hover:translate-x-0.5" /></span>
+                </button>
+              </div>
             </div>
-          </section>
+          </section>}
 
           <div ref={clientPreviewRef} tabIndex={-1} className="mx-auto w-full max-w-5xl scroll-mt-5 rounded-[28px] border bg-white p-4 shadow-sm outline-none sm:p-7">
             <div className="mb-6">
