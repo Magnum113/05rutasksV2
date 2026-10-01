@@ -5,9 +5,6 @@ import "@/components/my-promocodes.css"
 import {
   type DiscountEntity,
   type PromoCodeEntity,
-  PROMO_CATEGORY_OPTIONS,
-  PROMO_PRODUCT_OPTIONS,
-  PROMO_PROMOTION_OPTIONS,
   PROMO_SELLER_OPTIONS,
   formatRub,
 } from "@/admin/promoRegistry"
@@ -36,7 +33,6 @@ interface ClientPromo {
   status: PromoState
   expiresAt: string | null
   discount?: DiscountEntity
-  commonCode?: PromoCodeEntity
   external?: ExternalOffer
 }
 
@@ -44,7 +40,6 @@ interface ExternalOffer {
   active: boolean
   name: string
   description: string
-  terms: string
   code: string
   serviceName: string
   serviceUrl: string
@@ -114,8 +109,7 @@ function createExternalOffer(): ExternalOffer {
   return {
     active: true,
     name: "Скидка на продукты в Близко",
-    description: "Промокод для заказа продуктов в сервисе Близко.",
-    terms: "Промокод NUT10 действует только в сервисе Близко. Подробные правила применения проверяются в самом сервисе.",
+    description: "Промокод NUT10 действует только при заказе продуктов в Близко. Введите код при оформлении заказа в сервисе Близко.",
     code: "NUT10",
     serviceName: "Близко",
     serviceUrl: "https://blizko.05.ru/",
@@ -161,36 +155,6 @@ function discountValue(discount: DiscountEntity | undefined): string | null {
   return discount.discount_type === "percent" ? `−${discount.discount_value} %` : `−${formatRub(discount.discount_value)}`
 }
 
-function scopeLabel(discount: DiscountEntity): string {
-  if (discount.include_category_ids.length > 0) {
-    const names = discount.include_category_ids.map((id) => PROMO_CATEGORY_OPTIONS.find((option) => option.id === id)?.name ?? id)
-    return names.length <= 2 ? `На товары: ${names.join(", ")}` : `На ${names.length} категорий`
-  }
-  if (discount.include_product_ids.length > 0 || discount.promotion_ids.length > 0 || discount.include_title_keywords.length > 0) return "На выбранные товары"
-  return "На подходящие товары заказа"
-}
-
-function marketConditions(promo: ClientPromo): string[] {
-  const discount = promo.discount
-  if (!discount) return []
-  const lines: string[] = []
-  lines.push(scopeLabel(discount))
-  if (discount.include_product_ids.length > 0) lines.push(`Товары: ${discount.include_product_ids.map((id) => PROMO_PRODUCT_OPTIONS.find((option) => option.id === id)?.name ?? id).join(", ")}`)
-  if (discount.promotion_ids.length > 0) lines.push(`Товары акций: ${discount.promotion_ids.map((id) => PROMO_PROMOTION_OPTIONS.find((option) => option.id === id)?.name ?? id).join(", ")}`)
-  if (discount.include_title_keywords.length > 0) lines.push(`Слова в названии: ${discount.include_title_keywords.join(", ")}`)
-  if (discount.exclude_category_ids.length > 0) lines.push(`Не действует на категории: ${discount.exclude_category_ids.map((id) => PROMO_CATEGORY_OPTIONS.find((option) => option.id === id)?.name ?? id).join(", ")}`)
-  if (discount.exclude_product_ids.length > 0) lines.push(`Не действует на товары: ${discount.exclude_product_ids.map((id) => PROMO_PRODUCT_OPTIONS.find((option) => option.id === id)?.name ?? id).join(", ")}`)
-  if (discount.exclude_title_keywords.length > 0) lines.push(`Не действует на товары со словами: ${discount.exclude_title_keywords.join(", ")}`)
-  if (discount.seller_ids.length > 0) lines.push(`Продавцы: ${discount.seller_ids.map(sellerName).join(", ")}`)
-  else lines.push("Без ограничения по продавцу")
-  if (discount.min_order_amount !== null) lines.push(`При заказе от ${formatRub(discount.min_order_amount)}`)
-  if (promo.commonCode?.first_order_only) lines.push("Только для первого заказа")
-  if (discount.channels.length === 1) lines.push(discount.channels[0] === "app" ? "Только в приложении" : "Только на сайте")
-  if (promo.commonCode?.per_user_limit) lines.push(`Не более ${promo.commonCode.per_user_limit} ${promo.commonCode.per_user_limit === 1 ? "применения" : "применений"} на пользователя`)
-  if (discount.max_discount !== null) lines.push(`Скидка не больше ${formatRub(discount.max_discount)}`)
-  return lines
-}
-
 export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromocodesSectionProps) {
   const clientPreviewRef = useRef<HTMLDivElement>(null)
   const profileEntryRef = useRef<HTMLButtonElement>(null)
@@ -230,7 +194,7 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
       const promo = promos.find((item) => item.id === id)
       const discount = promo?.discount_id ? discountById.get(promo.discount_id) : undefined
       if (!promo || !discount || !isMarketCodeAvailable(promo, discount, today)) return []
-      return [{ id: `common:${promo.id}`, code: promo.code, title: discount.name, description: discount.description, kind: "common", status: "issued", expiresAt: promo.end_date < discount.end_date ? promo.end_date : discount.end_date, discount, commonCode: promo }]
+      return [{ id: `common:${promo.id}`, code: promo.code, title: discount.name, description: discount.description, kind: "common", status: "issued", expiresAt: promo.end_date < discount.end_date ? promo.end_date : discount.end_date, discount }]
     })
 
     const personalSeeds: Array<{ id: string; code: string; discountId: string; status: PromoState; expiresAt: string }> = [
@@ -311,8 +275,8 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
   }
 
   function saveExternalOffer() {
-    if (!offerDraft.name.trim() || !offerDraft.code.trim() || !offerDraft.description.trim() || !offerDraft.terms.trim() || !offerDraft.serviceName.trim()) {
-      setNotice("Заполните название, код, описание, условия и название сервиса.")
+    if (!offerDraft.name.trim() || !offerDraft.code.trim() || !offerDraft.description.trim() || !offerDraft.serviceName.trim()) {
+      setNotice("Заполните название, код, описание с условиями и название сервиса.")
       return
     }
     if (!offerDraft.startDate || !offerDraft.endDate || offerDraft.startDate > offerDraft.endDate) {
@@ -328,7 +292,7 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
         if (new URL(offerDraft.serviceUrl).protocol !== "https:") throw new Error("url")
       } catch { setNotice("Укажите корректную HTTPS-ссылку на внешний сервис."); return }
     }
-    setExternalOffer({ ...offerDraft, name: offerDraft.name.trim(), code: offerDraft.code.trim(), description: offerDraft.description.trim(), terms: offerDraft.terms.trim(), serviceUrl: offerDraft.serviceUrl.trim() })
+    setExternalOffer({ ...offerDraft, name: offerDraft.name.trim(), code: offerDraft.code.trim(), description: offerDraft.description.trim(), serviceUrl: offerDraft.serviceUrl.trim() })
     setNotice("Предложение сохранено. Проверяйте его показ в клиентском виде.")
   }
 
@@ -473,8 +437,7 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
             {([
               ["name", "Название предложения"], ["serviceName", "Сервис"], ["code", "Общий промокод"], ["serviceUrl", "Ссылка на сервис (HTTPS)"],
             ] as const).map(([key, label]) => <label key={key} className="grid gap-1 text-sm font-medium">{label}<Input value={offerDraft[key]} onChange={(event) => setOfferDraft((prev) => ({ ...prev, [key]: event.target.value }))} /></label>)}
-            <label className="grid gap-1 text-sm font-medium md:col-span-2">Краткое описание<Textarea value={offerDraft.description} onChange={(event) => setOfferDraft((prev) => ({ ...prev, description: event.target.value }))} /></label>
-            <label className="grid gap-1 text-sm font-medium md:col-span-2">Условия для пользователя<Textarea className="min-h-28" value={offerDraft.terms} onChange={(event) => setOfferDraft((prev) => ({ ...prev, terms: event.target.value }))} /></label>
+            <label className="grid gap-1 text-sm font-medium md:col-span-2">Описание и условия для пользователя<Textarea className="min-h-28" value={offerDraft.description} onChange={(event) => setOfferDraft((prev) => ({ ...prev, description: event.target.value }))} /></label>
             <label className="grid gap-1 text-sm font-medium">Показывать с<Input type="date" value={offerDraft.startDate} onChange={(event) => setOfferDraft((prev) => ({ ...prev, startDate: event.target.value }))} /></label>
             <label className="grid gap-1 text-sm font-medium">Показывать до<Input type="date" value={offerDraft.endDate} onChange={(event) => setOfferDraft((prev) => ({ ...prev, endDate: event.target.value }))} /></label>
             <label className="grid gap-1 text-sm font-medium">Аудитория
@@ -512,9 +475,9 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
                   <DialogTitle className="text-2xl leading-tight">{selected.title}</DialogTitle>
                   {selected.discount?.legal_terms_text.trim() ? <Button size="icon" variant="outline" aria-label="Юридические условия" title="Юридические условия" onClick={() => setShowLegal(true)}><Info /></Button> : null}
                 </div>
-                <DialogDescription>{selected.description}</DialogDescription>
+                <DialogDescription className="whitespace-pre-wrap">{selected.description}</DialogDescription>
               </DialogHeader>
-              {selected.kind === "external" ? <p className="text-sm font-medium text-[#8d101a]">Промокод действует только в {selected.external?.serviceName}</p> : null}
+              {selected.kind === "external" ? <p className="text-sm font-medium text-[#8d101a]">Сервис: {selected.external?.serviceName}</p> : null}
               {selected.discount ? <p className="text-3xl font-bold text-[#E30614]">{discountValue(selected.discount)}</p> : null}
               <div className="rounded-xl bg-slate-50 p-4">
                 <p className="text-xs text-muted-foreground">Промокод</p>
@@ -522,16 +485,12 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
               </div>
               <p className="text-sm text-muted-foreground">Действует до: {dateLabel(selected.expiresAt)}</p>
               {selected.discount ? <SellerMarks discount={selected.discount} /> : null}
-              <div className="rounded-xl border p-4">
-                <p className="font-semibold">Условия применения</p>
-                {selected.kind === "external" ? <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{selected.external?.terms}</p> : <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-muted-foreground">{marketConditions(selected).map((condition) => <li key={condition}>{condition}</li>)}</ul>}
-              </div>
               {selected.kind === "external" ? (
                 <Button disabled={!selected.external?.serviceUrl} onClick={() => { if (selected.external?.serviceUrl) window.open(selected.external.serviceUrl, "_blank", "noopener,noreferrer") }}><ExternalLink /> Перейти в {selected.external?.serviceName}</Button>
               ) : selected.discount?.promo_products_button_text && selected.discount.promo_products_button_url ? (
                 <Button onClick={() => window.open(new URL(selected.discount!.promo_products_button_url, "https://05.ru").toString(), "_blank", "noopener,noreferrer")}><ExternalLink /> {selected.discount.promo_products_button_text}</Button>
               ) : null}
-              <p className="text-xs text-muted-foreground">{selected.kind === "external" ? "Код применяется только во внешнем сервисе." : "Скопируйте код и введите его при оформлении заказа. Переход к товарам не применяет код автоматически."}</p>
+              {selected.kind !== "external" ? <p className="text-xs text-muted-foreground">Скопируйте код и введите его при оформлении заказа. Переход к товарам не применяет код автоматически.</p> : null}
               <Button variant="outline" onClick={() => { setSelectedId(null); setShowLegal(false) }}><Check /> К списку промокодов</Button>
             </>
           ) : null}
