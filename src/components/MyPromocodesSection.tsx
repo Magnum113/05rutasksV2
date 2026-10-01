@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Check, ChevronRight, Copy, ExternalLink, Gift, Info, Store, Ticket } from "lucide-react"
+import "@/components/my-promocodes.css"
 
 import {
   type DiscountEntity,
@@ -63,10 +64,39 @@ function dateAfter(days: number): string {
 
 function dateLabel(value: string | null): string {
   if (!value) return "Срок не указан"
-  const date = new Date(`${value.slice(0, 10)}T12:00:00`)
+  const hasTime = value.includes("T")
+  const date = new Date(hasTime ? value : `${value.slice(0, 10)}T12:00:00`)
   return Number.isNaN(date.getTime())
     ? value
-    : new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" }).format(date)
+    : new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric", ...(hasTime ? { hour: "2-digit", minute: "2-digit" } : {}) }).format(date)
+}
+
+function expiryTime(value: string | null): number {
+  if (!value) return Number.POSITIVE_INFINITY
+  return Date.parse(value.includes("T") ? value : `${value.slice(0, 10)}T23:59:59`)
+}
+
+function pluralForm(value: number, one: string, few: string, many: string): string {
+  const lastTwo = value % 100
+  if (lastTwo >= 11 && lastTwo <= 14) return many
+  const last = value % 10
+  return last === 1 ? one : last >= 2 && last <= 4 ? few : many
+}
+
+function profileExpiryText(entries: ClientPromo[], now: number): string {
+  const nearest = entries.filter((entry) => entry.expiresAt).sort((a, b) => expiryTime(a.expiresAt) - expiryTime(b.expiresAt))[0]
+  if (!nearest?.expiresAt) return "Откройте раздел, чтобы посмотреть условия"
+  const left = expiryTime(nearest.expiresAt) - now
+  if (nearest.expiresAt.includes("T") && left > 0 && left < 3600000) return "Ближайший истечёт меньше чем через час"
+  if (nearest.expiresAt.includes("T") && left > 0 && left <= 86400000) {
+    const hours = Math.ceil(left / 3600000)
+    return `Ближайший истечёт через ${hours} ${pluralForm(hours, "час", "часа", "часов")}`
+  }
+  if (nearest.expiresAt.includes("T") && left > 0 && left <= 7 * 86400000) {
+    const days = Math.ceil(left / 86400000)
+    return `Ближайший истечёт через ${days} ${pluralForm(days, "день", "дня", "дней")}`
+  }
+  return `Ближайший действует до ${dateLabel(nearest.expiresAt)}`
 }
 
 function normalizePhone(raw: string): string | null {
@@ -162,6 +192,9 @@ function marketConditions(promo: ClientPromo): string[] {
 }
 
 export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromocodesSectionProps) {
+  const clientPreviewRef = useRef<HTMLDivElement>(null)
+  const profileEntryRef = useRef<HTMLButtonElement>(null)
+  const [profileEntryVisible, setProfileEntryVisible] = useState(false)
   const [view, setView] = useState<"client" | "externalSettings">("client")
   const [demoState, setDemoState] = useState<"ready" | "empty" | "loading" | "error">("ready")
   const [authorized, setAuthorized] = useState(true)
@@ -172,12 +205,32 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showLegal, setShowLegal] = useState(false)
   const [notice, setNotice] = useState("")
+  const [now, setNow] = useState(() => Date.now())
+  const [demoHourlyExpiry] = useState(() => new Date(Date.now() + 6 * 3600000).toISOString())
 
   useEffect(() => {
     if (!notice) return
     const timeout = window.setTimeout(() => setNotice(""), 4500)
     return () => window.clearTimeout(timeout)
   }, [notice])
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 60000)
+    return () => window.clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    const entry = profileEntryRef.current
+    if (!entry) return
+    const observer = new IntersectionObserver(([item]) => {
+      if (item.isIntersecting) {
+        setProfileEntryVisible(true)
+        observer.disconnect()
+      }
+    }, { threshold: 0.5 })
+    observer.observe(entry)
+    return () => observer.disconnect()
+  }, [view])
 
   const discountById = useMemo(() => new Map(discounts.map((discount) => [discount.id, discount])), [discounts])
   const segmentPhones = useMemo(() => getSegmentPhones(externalOffer.phones), [externalOffer.phones])
@@ -190,17 +243,17 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
       const promo = promos.find((item) => item.id === id)
       const discount = promo?.discount_id ? discountById.get(promo.discount_id) : undefined
       if (!promo || !discount || !isMarketCodeAvailable(promo, discount, today)) return []
-      return [{ id: `common:${promo.id}`, code: promo.code, title: discount.name, description: discount.description, kind: "common", status: "issued", expiresAt: promo.end_date, discount, commonCode: promo }]
+      return [{ id: `common:${promo.id}`, code: promo.code, title: discount.name, description: discount.description, kind: "common", status: "issued", expiresAt: promo.end_date < discount.end_date ? promo.end_date : discount.end_date, discount, commonCode: promo }]
     })
 
-    const personalSeeds: Array<{ id: string; code: string; discountId: string; status: PromoState; days: number }> = [
-      { id: "personal:gift", code: "GIFT-9F2KQ7", discountId: "discount_1022", status: "issued", days: 3 },
-      { id: "personal:cart", code: "CART-91QW44", discountId: "discount_1007", status: "reserved", days: 2 },
+    const personalSeeds: Array<{ id: string; code: string; discountId: string; status: PromoState; expiresAt: string }> = [
+      { id: "personal:gift", code: "GIFT-9F2KQ7", discountId: "discount_1022", status: "issued", expiresAt: dateAfter(3) },
+      { id: "personal:cart", code: "CART-91QW44", discountId: "discount_1007", status: "reserved", expiresAt: demoHourlyExpiry },
     ]
     const personal: ClientPromo[] = personalSeeds.flatMap((seed) => {
       const discount = discountById.get(seed.discountId)
-      if (!discount || discount.status !== "active" || discount.start_date > today || discount.end_date < today || seed.days < 0) return []
-      return [{ id: seed.id, code: seed.code, title: discount.name, description: discount.description, kind: "personal", status: seed.status, expiresAt: dateAfter(seed.days), discount }]
+      if (!discount || discount.status !== "active" || discount.start_date > today || discount.end_date < today || expiryTime(seed.expiresAt) <= now) return []
+      return [{ id: seed.id, code: seed.code, title: discount.name, description: discount.description, kind: "personal", status: seed.status, expiresAt: seed.expiresAt, discount }]
     })
 
     const external: ClientPromo[] = offerVisible
@@ -208,13 +261,23 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
       : []
 
     return [...common, ...personal, ...external]
-  }, [savedCommonIds, promos, discountById, offerVisible, externalOffer])
+  }, [savedCommonIds, promos, discountById, offerVisible, externalOffer, demoHourlyExpiry, now])
 
   const selected = entries.find((entry) => entry.id === selectedId) ?? null
   const filteredEntries = entries.filter((entry) => {
     const query = globalSearch.trim().toLowerCase()
     return !query || `${entry.title} ${entry.description} ${entry.code} ${entry.external?.serviceName ?? ""}`.toLowerCase().includes(query)
-  }).sort((a, b) => (a.expiresAt ?? "9999").localeCompare(b.expiresAt ?? "9999"))
+  }).sort((a, b) => expiryTime(a.expiresAt) - expiryTime(b.expiresAt))
+  const profileTitle = !authorized ? "Войдите, чтобы увидеть промокоды"
+    : demoState === "loading" ? "Загружаем промокоды"
+    : demoState === "error" ? "Не удалось загрузить промокоды"
+    : demoState === "empty" || entries.length === 0 ? "Пока нет действующих промокодов"
+    : `У вас ${entries.length} ${pluralForm(entries.length, "промокод", "промокода", "промокодов")}`
+  const profileHint = !authorized ? "Откройте раздел, чтобы войти"
+    : demoState === "error" ? "Откройте раздел и попробуйте ещё раз"
+      : demoState === "loading" ? "Проверяем доступные предложения"
+        : demoState === "ready" && entries.length > 0 ? profileExpiryText(entries, now)
+          : "Откройте раздел «Мои промокоды»"
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("code")
@@ -314,7 +377,34 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
             </CardContent>
           </Card>
 
-          <div className="mx-auto w-full max-w-5xl rounded-[28px] border bg-white p-4 shadow-sm sm:p-7">
+          <section className="mx-auto w-full max-w-5xl" aria-labelledby="profile-preview-title">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Пример входа из личного кабинета</p>
+            <div className="rounded-[28px] border bg-slate-50 p-4 sm:p-6">
+              <h3 id="profile-preview-title" className="mb-4 text-xl font-semibold">Личный кабинет</h3>
+              <button
+                ref={profileEntryRef}
+                type="button"
+                className="profile-promo-entry group flex w-full items-center gap-4 rounded-[20px] border border-red-100 bg-white p-4 text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E30614] sm:p-5"
+                onClick={() => {
+                  clientPreviewRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })
+                  clientPreviewRef.current?.focus({ preventScroll: true })
+                }}
+              >
+                <span className={`profile-promo-entry__art relative flex h-14 w-16 shrink-0 items-center justify-center${profileEntryVisible ? " profile-promo-entry__art--visible" : ""}`} aria-hidden="true">
+                  <span className="profile-promo-entry__ticket-back absolute left-3 top-1 h-11 w-11 rotate-[-13deg] rounded-xl bg-[#FFE45C]" />
+                  <span className="profile-promo-entry__ticket-front absolute left-4 top-2 flex h-11 w-11 rotate-[8deg] items-center justify-center rounded-xl bg-[#E30614] text-white shadow-md"><Ticket className="h-6 w-6" strokeWidth={2} /></span>
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-base font-semibold">Мои промокоды</span>
+                  <span className="mt-1 block text-sm font-medium text-slate-900">{profileTitle}</span>
+                  <span className="mt-0.5 block text-sm text-muted-foreground">{profileHint}</span>
+                </span>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#E30614] transition-colors duration-150 group-hover:bg-red-100" aria-hidden="true"><ChevronRight className="h-5 w-5 transition-transform duration-150 group-hover:translate-x-0.5" /></span>
+              </button>
+            </div>
+          </section>
+
+          <div ref={clientPreviewRef} tabIndex={-1} className="mx-auto w-full max-w-5xl scroll-mt-5 rounded-[28px] border bg-white p-4 shadow-sm outline-none sm:p-7">
             <div className="mb-6">
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#E30614]">05.ru</p>
               <h3 className="mt-1 text-3xl font-bold tracking-tight">Мои промокоды</h3>

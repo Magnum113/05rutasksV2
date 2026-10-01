@@ -1,0 +1,49 @@
+.profile-promo-entry {
+  transition-property: border-color, box-shadow, transform;
+  transition-duration: 180ms;
+  transition-timing-function: ease-out;
+}
+
+.profile-promo-entry:hover {
+  border-color: rgb(227 6 20 / 0.35);
+  box-shadow: 0 10px 26px rgb(53 19 23 / 0.09);
+  transform: translateY(-2px);
+}
+
+.profile-promo-entry:active {
+  transform: scale(0.96);
+}
+
+.profile-promo-entry__art--visible {
+  animation: profile-promo-ticket-in 650ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.profile-promo-entry__ticket-front,
+.profile-promo-entry__ticket-back {
+  transition: transform 180ms ease-out;
+}
+
+.profile-promo-entry:hover .profile-promo-entry__ticket-front {
+  transform: translate(3px, -2px) rotate(13deg);
+}
+
+.profile-promo-entry:hover .profile-promo-entry__ticket-back {
+  transform: translate(-3px, 1px) rotate(-19deg);
+}
+
+@keyframes profile-promo-ticket-in {
+  from { opacity: 0; transform: translateY(9px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-promo-entry,
+  .profile-promo-entry__ticket-front,
+  .profile-promo-entry__ticket-back {
+    transition: none;
+  }
+
+  .profile-promo-entry__art--visible {
+    animation: none;
+  }
+}
