@@ -164,6 +164,7 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
   const clientPreviewRef = useRef<HTMLDivElement>(null)
   const profileEntryRef = useRef<HTMLButtonElement>(null)
   const [profileEntryVisible, setProfileEntryVisible] = useState(false)
+  const [profileMotionKey, setProfileMotionKey] = useState(0)
   const [view, setView] = useState<"client" | "externalSettings">("client")
   const [demoState, setDemoState] = useState<"ready" | "empty" | "loading" | "error">("ready")
   const [authorized, setAuthorized] = useState(true)
@@ -225,7 +226,6 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
     return !query || `${entry.title} ${entry.description} ${entry.code} ${entry.external?.serviceName ?? ""}`.toLowerCase().includes(query)
   }).sort((a, b) => expiryTime(a.expiresAt) - expiryTime(b.expiresAt))
   const showProfileEntry = authorized && demoState === "ready" && entries.length > 0
-  const profileTitle = `У вас ${entries.length} ${pluralForm(entries.length, "промокод", "промокода", "промокодов")}`
   const profileHint = profileExpiryText(entries, now)
 
   useEffect(() => {
@@ -240,10 +240,10 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
         setProfileEntryVisible(true)
         observer.disconnect()
       }
-    }, { threshold: 0.5 })
+    }, { threshold: 0.15 })
     observer.observe(entry)
     return () => observer.disconnect()
-  }, [view, showProfileEntry])
+  }, [view, showProfileEntry, profileMotionKey])
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("code")
@@ -344,10 +344,13 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
           </Card>
 
           {showProfileEntry && <section className="mx-auto w-full max-w-5xl" aria-labelledby="profile-preview-title">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Пример входа из личного кабинета</p>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Пример входа из личного кабинета</p>
+              <Button variant="ghost" size="sm" onClick={() => { setProfileEntryVisible(false); setProfileMotionKey((value) => value + 1) }}>Повторить анимацию</Button>
+            </div>
             <div className="rounded-[28px] border bg-slate-50 p-4 sm:p-6">
               <h3 id="profile-preview-title" className="mb-4 text-xl font-semibold">Личный кабинет</h3>
-              <div className={`profile-promo-entry__reveal${profileEntryVisible ? " profile-promo-entry__reveal--visible" : ""}`}>
+              <div key={profileMotionKey} className={`profile-promo-entry__reveal${profileEntryVisible ? " profile-promo-entry__reveal--visible" : ""}`}>
                 <button
                   ref={profileEntryRef}
                   type="button"
@@ -363,8 +366,7 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-base font-semibold">Мои промокоды</span>
-                    <span className="mt-1 block text-sm font-medium text-slate-900">{profileTitle}</span>
-                    {profileHint && <span className="mt-0.5 block text-sm text-muted-foreground">{profileHint}</span>}
+                    {profileHint && <span className="mt-1 block text-sm font-medium text-slate-900">{profileHint}</span>}
                   </span>
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#E30614] transition-colors duration-150 group-hover:bg-red-100" aria-hidden="true"><ChevronRight className="h-5 w-5 transition-transform duration-150 group-hover:translate-x-0.5" /></span>
                 </button>
