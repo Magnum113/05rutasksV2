@@ -10,7 +10,6 @@ import {
   PROMO_SELLER_OPTIONS,
   formatRub,
 } from "@/admin/promoRegistry"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -212,7 +211,6 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
   }, [savedCommonIds, promos, discountById, offerVisible, externalOffer])
 
   const selected = entries.find((entry) => entry.id === selectedId) ?? null
-  const activeCount = entries.length
   const filteredEntries = entries.filter((entry) => {
     const query = globalSearch.trim().toLowerCase()
     return !query || `${entry.title} ${entry.description} ${entry.code} ${entry.external?.serviceName ?? ""}`.toLowerCase().includes(query)
@@ -317,13 +315,10 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
           </Card>
 
           <div className="mx-auto w-full max-w-5xl rounded-[28px] border bg-white p-4 shadow-sm sm:p-7">
-            <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#E30614]">05.ru</p>
-                <h3 className="mt-1 text-3xl font-bold tracking-tight">Мои промокоды</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Скопируйте код и используйте его там, где он действует.</p>
-              </div>
-              <Badge variant="secondary" className="px-3 py-1">Действующих: {authorized && demoState === "ready" ? activeCount : 0}</Badge>
+            <div className="mb-6">
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#E30614]">05.ru</p>
+              <h3 className="mt-1 text-3xl font-bold tracking-tight">Мои промокоды</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Скопируйте код и используйте его там, где он действует.</p>
             </div>
 
             {!authorized ? (
