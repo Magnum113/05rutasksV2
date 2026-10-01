@@ -96,7 +96,7 @@ function profileExpiryText(entries: ClientPromo[], now: number): string | null {
       ? formatRub(nearest.discount.discount_value)
       : `${nearest.discount.discount_value} %`
     : `Промокод «${nearest.external?.serviceName ?? nearest.title}»`
-  return `${benefit} · истечёт через ${units}`
+  return `${benefit} сгорит через ${units}`
 }
 
 function normalizePhone(raw: string): string | null {
