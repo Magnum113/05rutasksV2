@@ -78,20 +78,25 @@ function pluralForm(value: number, one: string, few: string, many: string): stri
   return last === 1 ? one : last >= 2 && last <= 4 ? few : many
 }
 
-function profileExpiryText(entries: ClientPromo[], now: number): string {
-  const nearest = entries.filter((entry) => entry.expiresAt).sort((a, b) => expiryTime(a.expiresAt) - expiryTime(b.expiresAt))[0]
-  if (!nearest?.expiresAt) return "Откройте раздел, чтобы посмотреть условия"
+function profileExpiryText(entries: ClientPromo[], now: number): string | null {
+  const nearest = entries.filter((entry) => entry.expiresAt && expiryTime(entry.expiresAt) > now).sort((a, b) => expiryTime(a.expiresAt) - expiryTime(b.expiresAt))[0]
+  if (!nearest?.expiresAt) return null
   const left = expiryTime(nearest.expiresAt) - now
-  if (nearest.expiresAt.includes("T") && left > 0 && left < 3600000) return "Ближайший истечёт меньше чем через час"
-  if (nearest.expiresAt.includes("T") && left > 0 && left <= 86400000) {
-    const hours = Math.ceil(left / 3600000)
-    return `Ближайший истечёт через ${hours} ${pluralForm(hours, "час", "часа", "часов")}`
+  const hasExactTime = nearest.expiresAt.includes("T")
+  let units: string
+  if (hasExactTime && left <= 86400000) {
+    const hours = Math.max(1, Math.ceil(left / 3600000))
+    units = `${hours} ${pluralForm(hours, "час", "часа", "часов")}`
+  } else {
+    const days = Math.max(1, Math.ceil(left / 86400000))
+    units = `${days} ${pluralForm(days, "день", "дня", "дней")}`
   }
-  if (nearest.expiresAt.includes("T") && left > 0 && left <= 7 * 86400000) {
-    const days = Math.ceil(left / 86400000)
-    return `Ближайший истечёт через ${days} ${pluralForm(days, "день", "дня", "дней")}`
-  }
-  return `Ближайший действует до ${dateLabel(nearest.expiresAt)}`
+  const benefit = nearest.discount
+    ? nearest.discount.discount_type === "fixed"
+      ? formatRub(nearest.discount.discount_value)
+      : `${nearest.discount.discount_value} %`
+    : `Промокод «${nearest.external?.serviceName ?? nearest.title}»`
+  return `${benefit} · истечёт через ${units}`
 }
 
 function normalizePhone(raw: string): string | null {
@@ -198,8 +203,8 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
     })
 
     const personalSeeds: Array<{ id: string; code: string; discountId: string; status: PromoState; expiresAt: string }> = [
-      { id: "personal:gift", code: "GIFT-9F2KQ7", discountId: "discount_1022", status: "issued", expiresAt: dateAfter(3) },
-      { id: "personal:cart", code: "CART-91QW44", discountId: "discount_1007", status: "reserved", expiresAt: demoHourlyExpiry },
+      { id: "personal:gift", code: "GIFT-9F2KQ7", discountId: "discount_1022", status: "issued", expiresAt: demoHourlyExpiry },
+      { id: "personal:cart", code: "CART-91QW44", discountId: "discount_1007", status: "reserved", expiresAt: dateAfter(3) },
     ]
     const personal: ClientPromo[] = personalSeeds.flatMap((seed) => {
       const discount = discountById.get(seed.discountId)
@@ -359,7 +364,7 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
                   <span className="min-w-0 flex-1">
                     <span className="block text-base font-semibold">Мои промокоды</span>
                     <span className="mt-1 block text-sm font-medium text-slate-900">{profileTitle}</span>
-                    <span className="mt-0.5 block text-sm text-muted-foreground">{profileHint}</span>
+                    {profileHint && <span className="mt-0.5 block text-sm text-muted-foreground">{profileHint}</span>}
                   </span>
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#E30614] transition-colors duration-150 group-hover:bg-red-100" aria-hidden="true"><ChevronRight className="h-5 w-5 transition-transform duration-150 group-hover:translate-x-0.5" /></span>
                 </button>
