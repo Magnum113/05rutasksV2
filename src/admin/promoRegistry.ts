@@ -27,12 +27,17 @@ export interface PromoPromotionOption {
 export interface PromoSellerOption {
   id: string
   name: string
+  logo_url?: string
 }
 
 export interface DiscountEntity {
   id: string
   status: DiscountStatus
   name: string
+  description: string
+  legal_terms_text: string
+  promo_products_button_text: string
+  promo_products_button_url: string
   start_date: string
   end_date: string
   discount_type: PromoDiscountType
@@ -56,8 +61,6 @@ export interface DiscountEntity {
 export interface PromoCodeEntity {
   id: string
   status: PromoStatus
-  name: string
-  description: string
   code: string
   discount_id: string | null
   start_date: string
@@ -181,13 +184,23 @@ export const PROMO_PROMOTION_OPTIONS: PromoPromotionOption[] = [
   { id: "promo-campaign-electro", name: "Электроника недели" },
 ]
 
+function demoDateFromToday(days: number): string {
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
 export const MOCK_DISCOUNTS: DiscountEntity[] = [
   {
     id: "discount_1007",
     status: "active",
-    name: "Весенняя скидка на смартфоны",
-    start_date: "2026-02-10",
-    end_date: "2026-04-10",
+    name: "Скидка на смартфоны",
+    description: "Скидка 10 % на выбранные смартфоны при заказе от 5 000 ₽.",
+    legal_terms_text: "Промокод действует на выбранные смартфоны продавцов Smart Inc и City Electro. Скидка применяется к подходящим товарам при заказе от 5 000 ₽. Не суммируется с другим промокодом.",
+    promo_products_button_text: "Все товары по промокоду",
+    promo_products_button_url: "/catalog/smartphones",
+    start_date: demoDateFromToday(-10),
+    end_date: demoDateFromToday(30),
     discount_type: "percent",
     discount_value: 10,
     max_discount: 3000,
@@ -208,9 +221,13 @@ export const MOCK_DISCOUNTS: DiscountEntity[] = [
   {
     id: "discount_1022",
     status: "active",
-    name: "Мобильный welcome",
-    start_date: "2026-02-01",
-    end_date: "2026-04-01",
+    name: "Скидка на первый заказ",
+    description: "Скидка 700 ₽ на первый заказ в приложении.",
+    legal_terms_text: "Предложение действует только для первого заказа в приложении 05.ru. Промокод нельзя использовать повторно с того же аккаунта.",
+    promo_products_button_text: "",
+    promo_products_button_url: "",
+    start_date: demoDateFromToday(-4),
+    end_date: demoDateFromToday(7),
     discount_type: "fixed",
     discount_value: 700,
     max_discount: null,
@@ -231,7 +248,11 @@ export const MOCK_DISCOUNTS: DiscountEntity[] = [
   {
     id: "discount_1098",
     status: "inactive",
-    name: "Партнерский оффер Smart Inc",
+    name: "Скидка на технику для дома",
+    description: "Скидка 12 % на выбранную технику для дома.",
+    legal_terms_text: "",
+    promo_products_button_text: "Перейти к технике для дома",
+    promo_products_button_url: "/catalog/home-tech",
     start_date: "2026-03-01",
     end_date: "2026-03-31",
     discount_type: "percent",
@@ -255,6 +276,10 @@ export const MOCK_DISCOUNTS: DiscountEntity[] = [
     id: "discount_2001",
     status: "draft",
     name: "Автоскидка на бытовую технику",
+    description: "Скидка 7 % на бытовую технику при заказе от 3 500 ₽.",
+    legal_terms_text: "",
+    promo_products_button_text: "",
+    promo_products_button_url: "",
     start_date: "2026-03-05",
     end_date: "2026-05-01",
     discount_type: "percent",
@@ -280,12 +305,10 @@ export const MOCK_PROMO_CODES: PromoCodeEntity[] = [
   {
     id: "promo_001",
     status: "active",
-    name: "Скидка на смартфоны",
-    description: "Скидка 10 % на выбранные смартфоны при заказе от 5 000 ₽.",
     code: "SPRINGPHONE",
     discount_id: "discount_1007",
-    start_date: "2026-02-10",
-    end_date: "2026-03-25",
+    start_date: demoDateFromToday(-10),
+    end_date: demoDateFromToday(30),
     usage_mode: "multi_use",
     counter: 1000,
     current_counter: 412,
@@ -298,12 +321,10 @@ export const MOCK_PROMO_CODES: PromoCodeEntity[] = [
   {
     id: "promo_002",
     status: "active",
-    name: "Подарок на первый заказ",
-    description: "Скидка 700 ₽ на первый заказ в приложении.",
     code: "FIRSTAPP",
     discount_id: "discount_1022",
-    start_date: "2026-02-01",
-    end_date: "2026-04-01",
+    start_date: demoDateFromToday(-4),
+    end_date: demoDateFromToday(7),
     usage_mode: "multi_use",
     counter: null,
     current_counter: 95,
@@ -316,8 +337,6 @@ export const MOCK_PROMO_CODES: PromoCodeEntity[] = [
   {
     id: "promo_003",
     status: "inactive",
-    name: "Скидка на технику для дома",
-    description: "Скидка 12 % на выбранную технику для дома.",
     code: "SMARTSELLER",
     discount_id: "discount_1098",
     start_date: "2026-03-01",
@@ -334,8 +353,6 @@ export const MOCK_PROMO_CODES: PromoCodeEntity[] = [
   {
     id: "promo_004",
     status: "draft",
-    name: "Промокод для новой акции",
-    description: "Описание предложения, которое увидит пользователь.",
     code: "DRAFTNOLINK",
     discount_id: null,
     start_date: "2026-03-10",

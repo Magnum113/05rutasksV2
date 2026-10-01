@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react"
 
-import { DISCOUNT_STATUS_LABELS, MOCK_DISCOUNTS } from "@/admin/promoRegistry"
+import { type DiscountEntity, DISCOUNT_STATUS_LABELS } from "@/admin/promoRegistry"
 import {
   formatPersonalExpiry,
   MOCK_PERSONAL_CODES,
@@ -26,9 +26,9 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Textarea } from "@/components/ui/textarea"
 
 interface PersonalPromoSectionProps {
+  discounts: DiscountEntity[]
   globalSearch: string
   createSignal: number
   onCreateDiscount: () => void
@@ -50,8 +50,6 @@ interface IssuedFilters {
 
 interface TemplateForm {
   status: PersonalTemplateStatus
-  name: string
-  description: string
   key: string
   discount_id: string
   ttl_days: string
@@ -82,8 +80,6 @@ const CODE_STATUS_VARIANT: Record<PersonalCodeStatus, "default" | "secondary" | 
 function createTemplateForm(): TemplateForm {
   return {
     status: "draft",
-    name: "",
-    description: "",
     key: "",
     discount_id: "",
     ttl_days: "7",
@@ -97,8 +93,6 @@ function createTemplateForm(): TemplateForm {
 function templateToForm(template: PersonalTemplate): TemplateForm {
   return {
     status: template.status,
-    name: template.name,
-    description: template.description,
     key: template.key,
     discount_id: template.discount_id ?? "",
     ttl_days: String(template.ttl_days),
@@ -110,7 +104,7 @@ function templateToForm(template: PersonalTemplate): TemplateForm {
 }
 
 export function PersonalPromoSection(props: PersonalPromoSectionProps) {
-  const { globalSearch, createSignal, onCreateDiscount } = props
+  const { discounts, globalSearch, createSignal, onCreateDiscount } = props
 
   const [templates, setTemplates] = useState<PersonalTemplate[]>(MOCK_PERSONAL_TEMPLATES)
   const [instances] = useState<PersonalCodeInstance[]>(MOCK_PERSONAL_CODES)
@@ -146,14 +140,15 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
     return () => clearTimeout(timeout)
   }, [flash])
 
-  const discountById = useMemo(() => new Map(MOCK_DISCOUNTS.map((item) => [item.id, item])), [])
+  const discountById = useMemo(() => new Map(discounts.map((item) => [item.id, item])), [discounts])
   const templateById = useMemo(() => new Map(templates.map((item) => [item.id, item])), [templates])
 
   const query = globalSearch.trim().toLowerCase()
 
   const filteredTemplates = useMemo(() => {
     const rows = templates.filter((item) => {
-      const haystack = `${item.name} ${item.description} ${item.key}`.toLowerCase()
+      const linkedDiscount = item.discount_id ? discountById.get(item.discount_id) : null
+      const haystack = `${item.key} ${linkedDiscount?.name ?? ""} ${linkedDiscount?.description ?? ""}`.toLowerCase()
 
       if (query && !haystack.includes(query)) {
         return false
@@ -172,7 +167,7 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
 
     rows.sort((a, b) => (parseDate(b.created_at)?.getTime() ?? 0) - (parseDate(a.created_at)?.getTime() ?? 0))
     return rows
-  }, [query, templateFilters, templates])
+  }, [query, templateFilters, templates, discountById])
 
   const filteredInstances = useMemo(() => {
     const rows = instances.filter((item) => {
@@ -237,14 +232,6 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
       errors.push(message)
     }
 
-    if (!form.name.trim()) {
-      addError("name", "Название обязательно")
-    }
-
-    if (!form.description.trim()) {
-      addError("description", "Описание обязательно")
-    }
-
     const key = form.key.trim()
     if (!key) {
       addError("key", "Ключ (key) обязателен")
@@ -260,6 +247,13 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
 
     if (form.status !== "draft" && !form.discount_id) {
       addError("discount_id", "Для статуса «Активен/Неактивен» нужна связанная скидка")
+    }
+
+    if (form.status === "active" && form.discount_id) {
+      const linkedDiscount = discountById.get(form.discount_id)
+      if (linkedDiscount && (!linkedDiscount.name.trim() || !linkedDiscount.description.trim())) {
+        addError("discount_id", "У связанной скидки нужны название и описание")
+      }
     }
 
     const ttl = Number(form.ttl_days)
@@ -294,8 +288,6 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
 
     const payload = {
       status: form.status,
-      name: form.name.trim(),
-      description: form.description.trim(),
       key: form.key.trim(),
       discount_id: form.discount_id ? form.discount_id : null,
       ttl_days: Number(form.ttl_days),
@@ -307,7 +299,7 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
 
     if (editingId) {
       setTemplates((prev) => prev.map((item) => (item.id === editingId ? { ...item, ...payload } : item)))
-      setFlash({ type: "success", text: `Шаблон «${payload.name}» обновлён` })
+      setFlash({ type: "success", text: `Шаблон «${payload.key}» обновлён` })
     } else {
       const newTemplate: PersonalTemplate = {
         id: `tpl_${Math.random().toString(36).slice(2, 8)}`,
@@ -317,7 +309,7 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
         ...payload,
       }
       setTemplates((prev) => [newTemplate, ...prev])
-      setFlash({ type: "success", text: `Шаблон «${newTemplate.name}» создан` })
+      setFlash({ type: "success", text: `Шаблон «${newTemplate.key}» создан` })
     }
 
     setViewMode("list")
@@ -364,7 +356,7 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    <FieldBlock label="Поиск (название / описание / key)">
+                    <FieldBlock label="Поиск (скидка / key)">
                       <Input
                         value={templateFilters.search}
                         onChange={(event) => setTemplateFilters((prev) => ({ ...prev, search: event.target.value }))}
@@ -395,7 +387,7 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Название / key</TableHead>
+                          <TableHead>Key</TableHead>
                           <TableHead>Статус</TableHead>
                           <TableHead>Скидка</TableHead>
                           <TableHead>Срок</TableHead>
@@ -420,8 +412,7 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
                             return (
                               <TableRow key={item.id}>
                                 <TableCell>
-                                  <p className="font-semibold">{item.name}</p>
-                                  <p className="text-xs text-muted-foreground">{item.key}</p>
+                                  <p className="font-semibold">{item.key}</p>
                                 </TableCell>
                                 <TableCell>
                                   <Badge variant={TEMPLATE_STATUS_VARIANT[item.status]}>
@@ -600,18 +591,6 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
                   onChange={(value) => setField("status", value as PersonalTemplateStatus)}
                 />
 
-                <FieldBlock
-                  label="Название для пользователя *"
-                  error={fieldErrors.name}
-                  hint="Показывается в разделе «Мои промокоды»"
-                >
-                  <Input
-                    value={form.name}
-                    onChange={(event) => setField("name", event.target.value)}
-                    placeholder="Подарок на первый заказ"
-                  />
-                </FieldBlock>
-
                 <FieldBlock label="Ключ (key) *" error={fieldErrors.key} hint="По нему фичи вызывают выдачу. Пример: gift_7d">
                   <Input
                     value={form.key}
@@ -619,21 +598,6 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
                     placeholder="gift_7d"
                   />
                 </FieldBlock>
-
-                <div className="lg:col-span-3">
-                  <FieldBlock
-                    label="Описание для пользователя *"
-                    error={fieldErrors.description}
-                    hint="Показывается под названием в разделе «Мои промокоды»"
-                  >
-                    <Textarea
-                      value={form.description}
-                      onChange={(event) => setField("description", event.target.value)}
-                      placeholder="Коротко опишите выгоду и важные условия предложения"
-                      className="min-h-24"
-                    />
-                  </FieldBlock>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -654,7 +618,7 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
                   <SelectContent>
                     <SelectGroup>
                       <SelectItem value="none">Не выбрана</SelectItem>
-                      {MOCK_DISCOUNTS.map((discount) => (
+                      {discounts.map((discount) => (
                         <SelectItem key={discount.id} value={discount.id}>
                           {discount.name} ({DISCOUNT_STATUS_LABELS[discount.status]})
                         </SelectItem>
@@ -668,7 +632,8 @@ export function PersonalPromoSection(props: PersonalPromoSectionProps) {
                 <Alert>
                   <AlertTitle>Скидка: {selectedDiscount.name}</AlertTitle>
                   <AlertDescription>
-                    Расчёт и ассортиментные условия берутся из скидки. Статус: {DISCOUNT_STATUS_LABELS[selectedDiscount.status]},
+                    Название и описание для пользователя берутся из скидки. Описание: {selectedDiscount.description || "Не заполнено"}.
+                    Расчёт и ассортиментные условия тоже берутся из скидки. Статус: {DISCOUNT_STATUS_LABELS[selectedDiscount.status]},
                     период: {formatDate(selectedDiscount.start_date)} - {formatDate(selectedDiscount.end_date)}.
                   </AlertDescription>
                 </Alert>

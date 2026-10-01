@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react"
 
 import { CLAIM_WINDOW_DAYS, DEMO_NOW_ISO, MOCK_TASKS, REWARD_TYPE_OPTIONS, TASK_TYPE_OPTIONS } from "@/admin/mockData"
+import { type DiscountEntity, MOCK_DISCOUNTS, MOCK_PROMO_CODES, type PromoCodeEntity } from "@/admin/promoRegistry"
 import {
   type RewardType,
   type TargetType,
@@ -27,6 +28,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { PromoCodesSection } from "@/components/PromoCodesSection"
 import { PersonalPromoSection } from "@/components/PersonalPromoSection"
+import { MyPromocodesSection } from "@/components/MyPromocodesSection"
 import { PrizeWheelSection } from "@/components/PrizeWheelSection"
 import { PrizeWheelFullPrototype, PrizeWheelMvpPrototype } from "@/components/PrizeWheelMvpPrototype"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -55,7 +57,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
-type Screen = "tasks" | "editor" | "discounts" | "promo" | "personal" | "wheel" | "wheelPrototype" | "wheelFullPrototype"
+type Screen = "tasks" | "editor" | "discounts" | "promo" | "personal" | "myPromos" | "wheel" | "wheelPrototype" | "wheelFullPrototype"
 type RewardFilter = "all" | RewardType
 type TypeFilter = "all" | TaskType
 type StatusFilter = "all" | TaskStatus
@@ -63,6 +65,7 @@ type PublicationFilter = "all" | "draft" | "published"
 
 const ADMIN_ROOT_PATH = "/"
 const PRIZE_WHEEL_PATH = "/marketing/prize-wheel"
+const MY_PROMOS_PATH = "/my-promocodes"
 
 function resolveScreenFromLocation(): Screen {
   const route = new URLSearchParams(window.location.search).get("screen")
@@ -70,6 +73,7 @@ function resolveScreenFromLocation(): Screen {
   if (route === "wheel-full") return "wheelFullPrototype"
 
   const normalizedPath = window.location.pathname.replace(/\/+$/, "") || ADMIN_ROOT_PATH
+  if (normalizedPath === MY_PROMOS_PATH) return "myPromos"
   return normalizedPath === PRIZE_WHEEL_PATH ? "wheel" : "tasks"
 }
 
@@ -77,6 +81,7 @@ function getScreenUrl(screen: Screen): string {
   if (screen === "wheel") return PRIZE_WHEEL_PATH
   if (screen === "wheelPrototype") return `${PRIZE_WHEEL_PATH}?screen=wheel-mvp`
   if (screen === "wheelFullPrototype") return `${PRIZE_WHEEL_PATH}?screen=wheel-full`
+  if (screen === "myPromos") return MY_PROMOS_PATH
   return ADMIN_ROOT_PATH
 }
 
@@ -268,6 +273,8 @@ function App() {
   const now = useMemo(() => parseDate(DEMO_NOW_ISO) ?? new Date(), [])
 
   const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS)
+  const [discounts, setDiscounts] = useState<DiscountEntity[]>(MOCK_DISCOUNTS)
+  const [promos, setPromos] = useState<PromoCodeEntity[]>(MOCK_PROMO_CODES)
 
   const [screen, setScreen] = useState<Screen>(resolveScreenFromLocation)
   const [globalSearch, setGlobalSearch] = useState("")
@@ -850,6 +857,8 @@ function App() {
       ? "название, код промокода, связанная скидка"
       : screen === "discounts"
         ? "название скидки, продавец, ограничения"
+      : screen === "myPromos"
+        ? "код, название, сервис"
         : screen === "personal"
           ? "название, описание, key, код, телефон"
           : screen === "wheel"
@@ -927,6 +936,13 @@ function App() {
               </Button>
               <Button
                 className="w-full justify-start"
+                variant={screen === "myPromos" ? "default" : "secondary"}
+                onClick={() => navigateToScreen("myPromos")}
+              >
+                Мои промокоды · прототип
+              </Button>
+              <Button
+                className="w-full justify-start"
                 variant={screen === "wheel" ? "default" : "secondary"}
                 onClick={() => navigateToScreen("wheel")}
               >
@@ -963,7 +979,7 @@ function App() {
                 />
               </Field>
 
-              {screen !== "wheel" ? <Button onClick={onTopActionClick}>{topActionLabel}</Button> : null}
+              {screen !== "wheel" && screen !== "myPromos" ? <Button onClick={onTopActionClick}>{topActionLabel}</Button> : null}
             </div>
           </div>
 
@@ -1191,6 +1207,10 @@ function App() {
               {screen === "promo" || screen === "discounts" ? (
                 <PromoCodesSection
                   mode={screen === "promo" ? "promo" : "discounts"}
+                  discounts={discounts}
+                  setDiscounts={setDiscounts}
+                  promos={promos}
+                  setPromos={setPromos}
                   globalSearch={globalSearch}
                   promoCreateSignal={promoCreateSignal}
                   discountCreateSignal={discountCreateSignal}
@@ -1200,10 +1220,15 @@ function App() {
 
               {screen === "personal" ? (
                 <PersonalPromoSection
+                  discounts={discounts}
                   globalSearch={globalSearch}
                   createSignal={personalCreateSignal}
                   onCreateDiscount={beginCreateDiscount}
                 />
+              ) : null}
+
+              {screen === "myPromos" ? (
+                <MyPromocodesSection discounts={discounts} promos={promos} globalSearch={globalSearch} />
               ) : null}
 
               {screen === "wheel" ? (

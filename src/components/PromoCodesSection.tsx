@@ -1,4 +1,4 @@
-import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useState } from "react"
+import { type Dispatch, type KeyboardEvent, type ReactNode, type SetStateAction, useEffect, useMemo, useState } from "react"
 
 import {
   calcCategoryCoverage,
@@ -12,8 +12,6 @@ import {
   formatPromotionList,
   formatPromoSellerList,
   formatRub,
-  MOCK_DISCOUNTS,
-  MOCK_PROMO_CODES,
   normalizeKeywordList,
   type PromoCategoryOption,
   type PromoChannel,
@@ -71,6 +69,10 @@ import { Textarea } from "@/components/ui/textarea"
 
 interface PromoCodesSectionProps {
   mode: "promo" | "discounts"
+  discounts: DiscountEntity[]
+  setDiscounts: Dispatch<SetStateAction<DiscountEntity[]>>
+  promos: PromoCodeEntity[]
+  setPromos: Dispatch<SetStateAction<PromoCodeEntity[]>>
   globalSearch: string
   promoCreateSignal: number
   discountCreateSignal: number
@@ -99,6 +101,10 @@ interface PromoFilters {
 interface DiscountForm {
   status: DiscountStatus
   name: string
+  description: string
+  legal_terms_text: string
+  promo_products_button_text: string
+  promo_products_button_url: string
   start_date: string
   end_date: string
   discount_type: PromoDiscountType
@@ -120,8 +126,6 @@ interface DiscountForm {
 
 interface PromoForm {
   status: PromoStatus
-  name: string
-  description: string
   code: string
   discount_id: string
   start_date: string
@@ -158,6 +162,10 @@ function createDiscountForm(): DiscountForm {
   return {
     status: "draft",
     name: "",
+    description: "",
+    legal_terms_text: "",
+    promo_products_button_text: "",
+    promo_products_button_url: "",
     start_date: now.toISOString().slice(0, 10),
     end_date: end.toISOString().slice(0, 10),
     discount_type: "percent",
@@ -184,8 +192,6 @@ function createPromoForm(prefilledDiscountId?: string): PromoForm {
 
   return {
     status: "draft",
-    name: "",
-    description: "",
     code: "",
     discount_id: prefilledDiscountId ?? "",
     start_date: now.toISOString().slice(0, 10),
@@ -201,6 +207,10 @@ function discountToForm(discount: DiscountEntity): DiscountForm {
   return {
     status: discount.status,
     name: discount.name,
+    description: discount.description,
+    legal_terms_text: discount.legal_terms_text,
+    promo_products_button_text: discount.promo_products_button_text,
+    promo_products_button_url: discount.promo_products_button_url,
     start_date: discount.start_date,
     end_date: discount.end_date,
     discount_type: discount.discount_type,
@@ -224,8 +234,6 @@ function discountToForm(discount: DiscountEntity): DiscountForm {
 function promoToForm(promo: PromoCodeEntity): PromoForm {
   return {
     status: promo.status,
-    name: promo.name,
-    description: promo.description,
     code: promo.code,
     discount_id: promo.discount_id ?? "",
     start_date: promo.start_date,
@@ -234,6 +242,16 @@ function promoToForm(promo: PromoCodeEntity): PromoForm {
     counter: promo.counter === null ? "" : String(promo.counter),
     per_user_limit: promo.per_user_limit === null ? "" : String(promo.per_user_limit),
     first_order_only: promo.first_order_only,
+  }
+}
+
+function isValidPromoButtonUrl(value: string): boolean {
+  if (value.startsWith("/") && !value.startsWith("//")) return true
+  try {
+    const url = new URL(value)
+    return url.protocol === "https:" && (url.hostname === "05.ru" || url.hostname.endsWith(".05.ru"))
+  } catch {
+    return false
   }
 }
 
@@ -271,10 +289,8 @@ function dedupeCategorySelection(
 }
 
 export function PromoCodesSection(props: PromoCodesSectionProps) {
-  const { mode, globalSearch, promoCreateSignal, discountCreateSignal, onNavigate } = props
+  const { mode, discounts, setDiscounts, promos, setPromos, globalSearch, promoCreateSignal, discountCreateSignal, onNavigate } = props
 
-  const [discounts, setDiscounts] = useState<DiscountEntity[]>(MOCK_DISCOUNTS)
-  const [promos, setPromos] = useState<PromoCodeEntity[]>(MOCK_PROMO_CODES)
 
   const [discountViewMode, setDiscountViewMode] = useState<"list" | "form">("list")
   const [promoViewMode, setPromoViewMode] = useState<"list" | "form">("list")
@@ -436,7 +452,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
 
       if (query) {
         const haystack =
-          `${item.name} ${item.description} ${item.code} ${item.discount_id ?? ""} ${linkedDiscount?.name ?? ""} ${linkedDiscount?.status ?? ""}`.toLowerCase()
+          `${item.code} ${item.discount_id ?? ""} ${linkedDiscount?.name ?? ""} ${linkedDiscount?.description ?? ""} ${linkedDiscount?.status ?? ""}`.toLowerCase()
 
         if (!haystack.includes(query)) {
           return false
@@ -445,7 +461,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
 
       if (promoFilters.code) {
         const search = promoFilters.code.toLowerCase()
-        if (!`${item.name} ${item.code}`.toLowerCase().includes(search)) {
+        if (!`${linkedDiscount?.name ?? ""} ${item.code}`.toLowerCase().includes(search)) {
           return false
         }
       }
@@ -656,6 +672,19 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
       addError("name", "Поле «Название скидки» обязательно")
     }
 
+    if (discountForm.status === "active" && !discountForm.description.trim()) {
+      addError("description", "Для активной скидки нужно описание")
+    }
+
+    const buttonText = discountForm.promo_products_button_text.trim()
+    const buttonUrl = discountForm.promo_products_button_url.trim()
+    if (Boolean(buttonText) !== Boolean(buttonUrl)) {
+      addError("promo_products_button_url", "Для кнопки товаров заполните и текст, и ссылку")
+    }
+    if (buttonUrl && !isValidPromoButtonUrl(buttonUrl)) {
+      addError("promo_products_button_url", "Укажите ссылку на страницу Маркета")
+    }
+
     if (!discountForm.start_date) {
       addError("start_date", "Поле «Дата начала» обязательно")
     }
@@ -730,6 +759,10 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
     const payload = {
       status: discountForm.status,
       name: discountForm.name.trim(),
+      description: discountForm.description.trim(),
+      legal_terms_text: discountForm.legal_terms_text.trim(),
+      promo_products_button_text: discountForm.promo_products_button_text.trim(),
+      promo_products_button_url: discountForm.promo_products_button_url.trim(),
       start_date: discountForm.start_date,
       end_date: discountForm.end_date,
       discount_type: discountForm.discount_type,
@@ -787,14 +820,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
       errors.push(message)
     }
 
-    if (!promoForm.name.trim()) {
-      addError("name", "Поле «Название для пользователя» обязательно")
-    }
-
-    if (!promoForm.description.trim()) {
-      addError("description", "Поле «Описание для пользователя» обязательно")
-    }
-
     if (!promoForm.code.trim()) {
       addError("code", "Поле «Код промокода» обязательно")
     }
@@ -824,6 +849,13 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
 
     if (promoForm.status !== "draft" && !promoForm.discount_id) {
       addError("discount_id", "Для статуса «Активен/Неактивен» обязательно выбрать связанную скидку")
+    }
+
+    if (promoForm.status === "active" && promoForm.discount_id) {
+      const linkedDiscount = discountById.get(promoForm.discount_id)
+      if (linkedDiscount && (!linkedDiscount.name.trim() || !linkedDiscount.description.trim())) {
+        addError("discount_id", "У связанной скидки нужны название и описание")
+      }
     }
 
     if (promoForm.counter !== "") {
@@ -859,8 +891,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
 
     const payload = {
       status: promoForm.status,
-      name: promoForm.name.trim(),
-      description: promoForm.description.trim(),
       code: promoForm.code.trim(),
       discount_id: promoForm.discount_id ? promoForm.discount_id : null,
       start_date: promoForm.start_date,
@@ -1126,8 +1156,9 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                       <Input
                         value={discountForm.name}
                         onChange={(event) => setDiscountField("name", event.target.value)}
-                        placeholder="Весенняя скидка на смартфоны"
+                        placeholder="Скидка на смартфоны"
                       />
+                      <FieldDescription>Это название увидит пользователь в «Моих промокодах».</FieldDescription>
                     </FieldBlock>
 
                     <FieldBlock label="Дата начала *" error={discountFieldErrors.start_date}>
@@ -1145,7 +1176,52 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                         onChange={(event) => setDiscountField("end_date", event.target.value)}
                       />
                     </FieldBlock>
+                    <div className="lg:col-span-3">
+                      <FieldBlock label="Описание скидки *" error={discountFieldErrors.description}>
+                        <Textarea
+                          value={discountForm.description}
+                          onChange={(event) => setDiscountField("description", event.target.value)}
+                          placeholder="Коротко опишите выгоду и важные условия предложения"
+                          className="min-h-24"
+                        />
+                        <FieldDescription>Показывается пользователю для всех промокодов этой скидки. Обязательно для активной скидки.</FieldDescription>
+                      </FieldBlock>
+                    </div>
+                    <div className="lg:col-span-3">
+                      <FieldBlock label="Юридические условия (необязательно)">
+                        <Textarea
+                          value={discountForm.legal_terms_text}
+                          onChange={(event) => setDiscountField("legal_terms_text", event.target.value)}
+                          placeholder="Укажите полный текст юридических условий"
+                          className="min-h-28"
+                        />
+                        <FieldDescription>Отдельно от краткого описания. В открытом промокоде текст доступен по значку «i».</FieldDescription>
+                      </FieldBlock>
+                    </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Переход к товарам по промокоду</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  <FieldBlock label="Текст кнопки (необязательно)">
+                    <Input
+                      value={discountForm.promo_products_button_text}
+                      onChange={(event) => setDiscountField("promo_products_button_text", event.target.value)}
+                      placeholder="Все товары по промокоду"
+                    />
+                  </FieldBlock>
+                  <FieldBlock label="Ссылка кнопки (необязательно)" error={discountFieldErrors.promo_products_button_url}>
+                    <Input
+                      value={discountForm.promo_products_button_url}
+                      onChange={(event) => setDiscountField("promo_products_button_url", event.target.value)}
+                      placeholder="/catalog?promo=..."
+                    />
+                  </FieldBlock>
+                  <FieldDescription className="lg:col-span-2">Оба поля заполняются вместе. Кнопка появится у всех промокодов этой скидки и только откроет страницу товаров — код автоматически не применяется.</FieldDescription>
                 </CardContent>
               </Card>
 
@@ -1533,7 +1609,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Название / код</TableHead>
+                          <TableHead>Скидка / код</TableHead>
                           <TableHead>Статус</TableHead>
                           <TableHead>Период действия</TableHead>
                           <TableHead>Режим использования</TableHead>
@@ -1560,7 +1636,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                             return (
                               <TableRow key={item.id}>
                                 <TableCell>
-                                  <p className="font-semibold">{item.name}</p>
+                                  <p className="font-semibold">{linkedDiscount?.name ?? "Скидка не выбрана"}</p>
                                   <p className="font-mono text-xs text-muted-foreground">{item.code}</p>
                                 </TableCell>
                                 <TableCell>
@@ -1611,7 +1687,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
               <div>
                 <h2 className="text-2xl font-semibold">{editingPromoId ? "Редактировать промокод" : "Создать промокод"}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Код, период и лимиты настраиваются в промокоде. Условия применения берутся из связанной скидки.
+                  Код, период и лимиты настраиваются в промокоде. Название, описание и условия применения берутся из связанной скидки.
                 </p>
               </div>
 
@@ -1641,14 +1717,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                       onChange={(value) => setPromoField("status", value as PromoStatus)}
                     />
 
-                    <FieldBlock label="Название для пользователя *" error={promoFieldErrors.name}>
-                      <Input
-                        value={promoForm.name}
-                        onChange={(event) => setPromoField("name", event.target.value)}
-                        placeholder="Скидка на смартфоны"
-                      />
-                    </FieldBlock>
-
                     <FieldBlock label="Код промокода *" error={promoFieldErrors.code}>
                       <Input
                         value={promoForm.code}
@@ -1657,16 +1725,6 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                       />
                     </FieldBlock>
 
-                    <div className="lg:col-span-3">
-                      <FieldBlock label="Описание для пользователя *" error={promoFieldErrors.description}>
-                        <Textarea
-                          value={promoForm.description}
-                          onChange={(event) => setPromoField("description", event.target.value)}
-                          placeholder="Коротко опишите выгоду и важные условия предложения"
-                          className="min-h-24"
-                        />
-                      </FieldBlock>
-                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -1698,6 +1756,7 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
                     <Alert>
                       <AlertTitle>Выбрана скидка: {selectedPromoDiscount.name}</AlertTitle>
                       <AlertDescription>
+                        <p>Описание для пользователя: {selectedPromoDiscount.description || "Не заполнено"}</p>
                         <p>
                           Статус скидки: {DISCOUNT_STATUS_LABELS[selectedPromoDiscount.status]}, период:{" "}
                           {formatDate(selectedPromoDiscount.start_date)} - {formatDate(selectedPromoDiscount.end_date)}
