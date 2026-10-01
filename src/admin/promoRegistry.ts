@@ -129,12 +129,18 @@ export const PROMO_USAGE_MODE_OPTIONS: Array<{ value: PromoUsageMode; label: str
   { value: "multi_use", label: PROMO_USAGE_MODE_LABELS.multi_use },
 ]
 
+// Иллюстративные логотипы продавцов для прототипа. В продукте logo_url приходит из каталога продавцов.
+function demoSellerLogo(mark: string, background: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80"><circle cx="40" cy="40" r="40" fill="${background}"/><text x="40" y="49" text-anchor="middle" font-family="Arial,sans-serif" font-size="25" font-weight="700" fill="white">${mark}</text></svg>`
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
+}
+
 export const PROMO_SELLER_OPTIONS: PromoSellerOption[] = [
-  { id: "seller-smart-inc", name: "Smart Inc" },
-  { id: "seller-home-tech", name: "Home Tech" },
-  { id: "seller-gadget-world", name: "Gadget World" },
-  { id: "seller-kids-market", name: "Kids Market" },
-  { id: "seller-city-electro", name: "City Electro" },
+  { id: "seller-smart-inc", name: "Smart Inc", logo_url: demoSellerLogo("SI", "#142C4D") },
+  { id: "seller-home-tech", name: "Home Tech", logo_url: demoSellerLogo("HT", "#8A3F13") },
+  { id: "seller-gadget-world", name: "Gadget World", logo_url: demoSellerLogo("GW", "#5D3CA5") },
+  { id: "seller-kids-market", name: "Kids Market", logo_url: demoSellerLogo("KM", "#A92852") },
+  { id: "seller-city-electro", name: "City Electro", logo_url: demoSellerLogo("CE", "#13786D") },
 ]
 
 export const CATEGORY_SCOPE_OPTIONS: Array<{ value: CategoryScope; label: string }> = [

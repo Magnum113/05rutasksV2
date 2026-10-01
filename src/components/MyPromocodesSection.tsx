@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Check, Copy, ExternalLink, Gift, Info, Store, Ticket } from "lucide-react"
+import { Check, ChevronRight, Copy, ExternalLink, Gift, Info, Store, Ticket } from "lucide-react"
 
 import {
   type DiscountEntity,
@@ -24,7 +24,7 @@ interface MyPromocodesSectionProps {
   globalSearch: string
 }
 
-type PromoState = "issued" | "reserved" | "redeemed" | "expired"
+type PromoState = "issued" | "reserved"
 type PromoKind = "common" | "personal" | "external"
 
 interface ClientPromo {
@@ -56,13 +56,6 @@ interface ExternalOffer {
 
 const DEMO_USER_PHONE = "79000000001"
 
-const STATUS_LABEL: Record<PromoState, string> = {
-  issued: "Действует",
-  reserved: "Применён в корзине",
-  redeemed: "Использован",
-  expired: "Истёк",
-}
-
 function dateAfter(days: number): string {
   const date = new Date()
   date.setDate(date.getDate() + days)
@@ -75,21 +68,6 @@ function dateLabel(value: string | null): string {
   return Number.isNaN(date.getTime())
     ? value
     : new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" }).format(date)
-}
-
-function daysUntil(value: string | null): number | null {
-  if (!value) return null
-  const end = Date.parse(`${value.slice(0, 10)}T00:00:00Z`)
-  const today = Date.parse(`${dateAfter(0)}T00:00:00Z`)
-  return Number.isNaN(end) ? null : Math.max(0, Math.round((end - today) / 86400000))
-}
-
-function remainingLabel(value: string | null): string | null {
-  const days = daysUntil(value)
-  if (days === null || days > 5) return null
-  if (days === 0) return "Заканчивается сегодня"
-  if (days === 1) return "Остался 1 день"
-  return `Осталось ${days} ${days === 5 ? "дней" : "дня"}`
 }
 
 function normalizePhone(raw: string): string | null {
@@ -123,23 +101,30 @@ function sellerName(id: string): string {
   return PROMO_SELLER_OPTIONS.find((item) => item.id === id)?.name ?? id
 }
 
-function SellerMarks({ discount }: { discount: DiscountEntity }) {
+function SellerMarks({ discount, compact = false }: { discount: DiscountEntity; compact?: boolean }) {
   if (discount.seller_ids.length === 0) return <span className="text-xs text-muted-foreground">У всех продавцов</span>
   return (
-    <div className="flex flex-wrap items-center gap-1.5" aria-label={`Продавцы: ${discount.seller_ids.map(sellerName).join(", ")}`}>
+    <div className={compact ? "flex min-w-0 items-center gap-2" : "flex flex-wrap items-center gap-2"} aria-label={`Продавцы: ${discount.seller_ids.map(sellerName).join(", ")}`}>
+      <div className={compact ? "flex -space-x-2" : "flex flex-wrap gap-2"}>
       {discount.seller_ids.map((id) => {
         const seller = PROMO_SELLER_OPTIONS.find((item) => item.id === id)
         return (
-          <span key={id} title={seller?.name ?? id} className="inline-flex items-center gap-1 rounded-full border bg-white px-2 py-1 text-xs text-foreground">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-600">
-              {seller?.logo_url ? <img src={seller.logo_url} alt="" className="h-5 w-5 rounded-full object-contain" /> : <Store className="h-3 w-3" />}
-            </span>
-            {seller?.name ?? id}
+          <span key={id} title={seller?.name ?? id} className="inline-flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-slate-100 text-slate-600 ring-1 ring-slate-200">
+            {seller?.logo_url ? <img src={seller.logo_url} alt="" className="h-full w-full rounded-full object-cover" /> : <Store className="h-3.5 w-3.5" />}
           </span>
         )
       })}
+      </div>
+      <span className={compact ? "truncate text-xs text-muted-foreground" : "text-sm text-foreground"}>{discount.seller_ids.map(sellerName).join(", ")}</span>
     </div>
   )
+}
+
+function isMarketCodeAvailable(promo: PromoCodeEntity, discount: DiscountEntity, today: string): boolean {
+  return promo.status === "active" && discount.status === "active"
+    && promo.start_date <= today && promo.end_date >= today
+    && discount.start_date <= today && discount.end_date >= today
+    && (promo.counter === null || promo.current_counter < promo.counter)
 }
 
 function discountValue(discount: DiscountEntity | undefined): string | null {
@@ -179,7 +164,6 @@ function marketConditions(promo: ClientPromo): string[] {
 
 export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromocodesSectionProps) {
   const [view, setView] = useState<"client" | "externalSettings">("client")
-  const [tab, setTab] = useState<"active" | "history">("active")
   const [demoState, setDemoState] = useState<"ready" | "empty" | "loading" | "error">("ready")
   const [authorized, setAuthorized] = useState(true)
   const [savedCommonIds, setSavedCommonIds] = useState<string[]>(["promo_001"])
@@ -202,23 +186,21 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
   const offerVisible = authorized && externalOffer.active && offerInPeriod && (externalOffer.audience === "all" || segmentPhones.includes(DEMO_USER_PHONE))
 
   const entries = useMemo<ClientPromo[]>(() => {
+    const today = dateAfter(0)
     const common: ClientPromo[] = savedCommonIds.flatMap((id) => {
       const promo = promos.find((item) => item.id === id)
       const discount = promo?.discount_id ? discountById.get(promo.discount_id) : undefined
-      if (!promo || !discount) return []
-      const active = promo.status === "active" && discount.status === "active" && promo.end_date >= dateAfter(0) && discount.end_date >= dateAfter(0)
-      return [{ id: `common:${promo.id}`, code: promo.code, title: discount.name, description: discount.description, kind: "common", status: active ? "issued" : "expired", expiresAt: promo.end_date, discount, commonCode: promo }]
+      if (!promo || !discount || !isMarketCodeAvailable(promo, discount, today)) return []
+      return [{ id: `common:${promo.id}`, code: promo.code, title: discount.name, description: discount.description, kind: "common", status: "issued", expiresAt: promo.end_date, discount, commonCode: promo }]
     })
 
     const personalSeeds: Array<{ id: string; code: string; discountId: string; status: PromoState; days: number }> = [
       { id: "personal:gift", code: "GIFT-9F2KQ7", discountId: "discount_1022", status: "issued", days: 3 },
       { id: "personal:cart", code: "CART-91QW44", discountId: "discount_1007", status: "reserved", days: 2 },
-      { id: "personal:used", code: "GIFT-7A1MP3", discountId: "discount_1022", status: "redeemed", days: -6 },
-      { id: "personal:expired", code: "CART-33LZ08", discountId: "discount_1007", status: "expired", days: -3 },
     ]
     const personal: ClientPromo[] = personalSeeds.flatMap((seed) => {
       const discount = discountById.get(seed.discountId)
-      if (!discount) return []
+      if (!discount || discount.status !== "active" || discount.start_date > today || discount.end_date < today || seed.days < 0) return []
       return [{ id: seed.id, code: seed.code, title: discount.name, description: discount.description, kind: "personal", status: seed.status, expiresAt: dateAfter(seed.days), discount }]
     })
 
@@ -230,10 +212,8 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
   }, [savedCommonIds, promos, discountById, offerVisible, externalOffer])
 
   const selected = entries.find((entry) => entry.id === selectedId) ?? null
-  const activeCount = entries.filter((entry) => entry.status === "issued" || entry.status === "reserved").length
+  const activeCount = entries.length
   const filteredEntries = entries.filter((entry) => {
-    const isHistory = entry.status === "redeemed" || entry.status === "expired"
-    if ((tab === "history") !== isHistory) return false
     const query = globalSearch.trim().toLowerCase()
     return !query || `${entry.title} ${entry.description} ${entry.code} ${entry.external?.serviceName ?? ""}`.toLowerCase().includes(query)
   }).sort((a, b) => (a.expiresAt ?? "9999").localeCompare(b.expiresAt ?? "9999"))
@@ -241,21 +221,22 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("code")
     if (!code) return
-    const promo = promos.find((item) => item.code.toLowerCase() === code.toLowerCase() && item.status === "active")
-    if (promo) {
+    const promo = promos.find((item) => item.code.toLowerCase() === code.toLowerCase())
+    const discount = promo?.discount_id ? discountById.get(promo.discount_id) : undefined
+    if (promo && discount && isMarketCodeAvailable(promo, discount, dateAfter(0))) {
       setSavedCommonIds((previous) => previous.includes(promo.id) ? previous : [...previous, promo.id])
       setSelectedId(`common:${promo.id}`)
       return
     }
     if (code.toLowerCase() === externalOffer.code.toLowerCase() && offerVisible) setSelectedId("external:blizko")
-  }, [promos, externalOffer.code, offerVisible])
+  }, [promos, discountById, externalOffer.code, offerVisible])
 
   function saveCommonCode(rawCode: string) {
     if (!authorized) { setNotice("Войдите в аккаунт, чтобы сохранить промокод."); return }
     const promo = promos.find((item) => item.code.toLowerCase() === rawCode.trim().toLowerCase())
     if (!promo || promo.status !== "active" || !promo.discount_id) { setNotice("Действующий общий промокод Маркета не найден."); return }
     const discount = discountById.get(promo.discount_id)
-    if (!discount || discount.status !== "active" || promo.end_date < dateAfter(0)) { setNotice("Этот промокод сейчас недоступен."); return }
+    if (!discount || !isMarketCodeAvailable(promo, discount, dateAfter(0))) { setNotice("Этот промокод сейчас недоступен."); return }
     setSavedCommonIds((previous) => previous.includes(promo.id) ? previous : [...previous, promo.id])
     setSelectedId(`common:${promo.id}`)
     setCodeToSave("")
@@ -352,7 +333,7 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
               </div>
             ) : demoState === "loading" ? (
               <div role="status" className="grid gap-3 md:grid-cols-2" aria-label="Загружаем промокоды">
-                {[0, 1].map((item) => <div key={item} className="h-56 animate-pulse rounded-2xl border bg-slate-100" />)}
+                {[0, 1].map((item) => <div key={item} className="h-36 animate-pulse rounded-2xl border bg-slate-100" />)}
               </div>
             ) : demoState === "error" ? (
               <div className="rounded-2xl border border-dashed p-10 text-center">
@@ -368,42 +349,29 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
               </div>
             ) : (
               <>
-                <div className="mb-5 flex gap-2 border-b pb-3" role="tablist" aria-label="Разделы промокодов">
-                  <Button role="tab" aria-selected={tab === "active"} variant={tab === "active" ? "default" : "ghost"} onClick={() => setTab("active")}>Действующие</Button>
-                  <Button role="tab" aria-selected={tab === "history"} variant={tab === "history" ? "default" : "ghost"} onClick={() => setTab("history")}>История</Button>
-                </div>
                 {filteredEntries.length === 0 ? (
                   <div className="rounded-2xl border border-dashed p-10 text-center">
                     <Gift className="mx-auto mb-3 h-9 w-9 text-[#E30614]" />
-                    <p className="font-semibold">{globalSearch ? "Ничего не найдено" : tab === "active" ? "Пока нет действующих промокодов" : "История пока пуста"}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{tab === "active" ? "Промокоды, которые вы сохраните, появятся здесь." : "Здесь будут использованные и истёкшие коды."}</p>
+                    <p className="font-semibold">{globalSearch ? "Ничего не найдено" : "Пока нет действующих промокодов"}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Промокоды, которые вы сохраните или получите, появятся здесь.</p>
                   </div>
                 ) : (
                   <div className="grid gap-3 md:grid-cols-2">
                     {filteredEntries.map((entry) => (
-                      <article key={entry.id} className="flex flex-col justify-between gap-4 rounded-2xl border bg-white p-4 shadow-sm">
-                        <div>
-                          <div className="mb-3 flex items-start justify-between gap-2">
-                            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-50 text-[#E30614]">{entry.kind === "external" ? <Gift className="h-5 w-5" /> : <Ticket className="h-5 w-5" />}</span>
-                            <Badge variant={entry.status === "issued" ? "default" : "secondary"}>{STATUS_LABEL[entry.status]}</Badge>
-                          </div>
-                          <h4 className="text-lg font-semibold leading-tight">{entry.title}</h4>
-                          <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{entry.description}</p>
-                          {entry.kind === "external" ? <p className="mt-2 text-xs font-medium text-[#8d101a]">Действует только в {entry.external?.serviceName}</p> : null}
-                          {entry.discount ? <p className="mt-3 text-2xl font-bold text-[#E30614]">{discountValue(entry.discount)}</p> : null}
-                          {entry.discount ? <p className="mt-2 text-sm text-foreground">{scopeLabel(entry.discount)}</p> : null}
-                          {entry.discount?.min_order_amount !== null && entry.discount?.min_order_amount !== undefined ? <p className="mt-1 text-sm text-muted-foreground">На заказ от {formatRub(entry.discount.min_order_amount)}</p> : null}
-                          {entry.discount ? <div className="mt-3"><SellerMarks discount={entry.discount} /></div> : null}
-                          {entry.discount && (entry.commonCode?.first_order_only || entry.discount.channels.length === 1) ? <div className="mt-2 flex flex-wrap gap-1.5">{entry.commonCode?.first_order_only ? <Badge variant="outline">Для первого заказа</Badge> : null}{entry.discount.channels.length === 1 ? <Badge variant="outline">{entry.discount.channels[0] === "app" ? "В приложении" : "На сайте"}</Badge> : null}</div> : null}
-                          <p className="mt-3 text-xs text-muted-foreground">{entry.status === "expired" ? "Истёк " : "Действует до "}{dateLabel(entry.expiresAt)}{entry.status === "issued" && remainingLabel(entry.expiresAt) ? ` · ${remainingLabel(entry.expiresAt)}` : ""}</p>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-                          {entry.status === "issued" ? <button type="button" className="rounded-lg bg-slate-50 px-2 py-1 font-mono text-sm font-semibold hover:bg-slate-100" aria-label={`Скопировать промокод ${entry.code}`} onClick={() => copyText(entry.code, "Код скопирован")}>{entry.code}</button> : <code className="rounded-lg bg-slate-50 px-2 py-1 font-mono text-sm font-semibold">{entry.code}</code>}
-                          {entry.status === "issued" ? <Button size="sm" onClick={() => copyText(entry.code, "Код скопирован")}><Copy /> Скопировать</Button> : null}
-                          {entry.status === "issued" || entry.status === "reserved" ? <Button variant="outline" size="sm" onClick={() => { setSelectedId(entry.id); setShowLegal(false) }}>Условия</Button> : null}
-                          {entry.kind === "external" && entry.external?.serviceUrl ? <Button variant="outline" size="sm" onClick={() => window.open(entry.external!.serviceUrl, "_blank", "noopener,noreferrer")}><ExternalLink /> В {entry.external.serviceName}</Button> : null}
-                        </div>
-                      </article>
+                      <button key={entry.id} type="button" className="group flex min-h-36 w-full flex-col justify-between gap-3 rounded-2xl border bg-white p-4 text-left shadow-sm transition-colors hover:border-[#E30614]/40 hover:bg-red-50/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E30614]" onClick={() => { setSelectedId(entry.id); setShowLegal(false) }} aria-label={`Открыть промокод «${entry.title}»`}>
+                        <span className="flex min-w-0 items-start gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-[#E30614]">{entry.kind === "external" ? <Gift className="h-5 w-5" /> : <Ticket className="h-5 w-5" />}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block line-clamp-2 font-semibold leading-snug">{entry.title}</span>
+                            <span className="mt-1 block text-sm font-semibold text-[#E30614]">{entry.discount ? discountValue(entry.discount) : `Для заказов в ${entry.external?.serviceName}`}</span>
+                          </span>
+                          <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                        </span>
+                        <span className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t pt-3">
+                          {entry.discount ? <SellerMarks discount={entry.discount} compact /> : <span className="text-xs text-muted-foreground">{entry.external?.serviceName}</span>}
+                          <span className="text-xs text-muted-foreground">До {dateLabel(entry.expiresAt)}</span>
+                        </span>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -462,13 +430,13 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
                 </div>
                 <DialogDescription>{selected.description}</DialogDescription>
               </DialogHeader>
-              <div className="flex flex-wrap items-center gap-2"><Badge variant={selected.status === "issued" ? "default" : "secondary"}>{STATUS_LABEL[selected.status]}</Badge>{selected.kind === "external" ? <Badge variant="outline">Только в {selected.external?.serviceName}</Badge> : null}</div>
+              {selected.kind === "external" ? <p className="text-sm font-medium text-[#8d101a]">Промокод действует только в {selected.external?.serviceName}</p> : null}
               {selected.discount ? <p className="text-3xl font-bold text-[#E30614]">{discountValue(selected.discount)}</p> : null}
               <div className="rounded-xl bg-slate-50 p-4">
                 <p className="text-xs text-muted-foreground">Промокод</p>
-                <div className="mt-1 flex flex-wrap items-center justify-between gap-2"><code className="font-mono text-xl font-bold tracking-wide">{selected.code}</code>{selected.status === "issued" ? <Button size="sm" onClick={() => copyText(selected.code, "Код скопирован")}> <Copy /> Скопировать</Button> : null}</div>
+                <div className="mt-1 flex flex-wrap items-center justify-between gap-2"><code className="font-mono text-xl font-bold tracking-wide">{selected.code}</code><Button size="sm" onClick={() => copyText(selected.code, "Код скопирован")}> <Copy /> Скопировать</Button></div>
               </div>
-              <p className="text-sm text-muted-foreground">{selected.status === "expired" ? "Срок действия истёк: " : "Действует до: "}{dateLabel(selected.expiresAt)}</p>
+              <p className="text-sm text-muted-foreground">Действует до: {dateLabel(selected.expiresAt)}</p>
               {selected.discount ? <SellerMarks discount={selected.discount} /> : null}
               <div className="rounded-xl border p-4">
                 <p className="font-semibold">Условия применения</p>
@@ -476,7 +444,7 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
               </div>
               {selected.kind === "external" ? (
                 <Button disabled={!selected.external?.serviceUrl} onClick={() => { if (selected.external?.serviceUrl) window.open(selected.external.serviceUrl, "_blank", "noopener,noreferrer") }}><ExternalLink /> Перейти в {selected.external?.serviceName}</Button>
-              ) : selected.status === "issued" && selected.discount?.promo_products_button_text && selected.discount.promo_products_button_url ? (
+              ) : selected.discount?.promo_products_button_text && selected.discount.promo_products_button_url ? (
                 <Button onClick={() => window.open(new URL(selected.discount!.promo_products_button_url, "https://05.ru").toString(), "_blank", "noopener,noreferrer")}><ExternalLink /> {selected.discount.promo_products_button_text}</Button>
               ) : null}
               <p className="text-xs text-muted-foreground">{selected.kind === "external" ? "Код применяется только во внешнем сервисе." : "Скопируйте код и введите его при оформлении заказа. Переход к товарам не применяет код автоматически."}</p>
