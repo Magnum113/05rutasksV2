@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useMemo, useState } from "react"
 
 import { CLAIM_WINDOW_DAYS, DEMO_NOW_ISO, MOCK_TASKS, REWARD_TYPE_OPTIONS, TASK_TYPE_OPTIONS } from "@/admin/mockData"
 import { type DiscountEntity, MOCK_DISCOUNTS, MOCK_PROMO_CODES, type PromoCodeEntity } from "@/admin/promoRegistry"
+import { createSeedExternalOffers, type ExternalOffer } from "@/admin/externalOffers"
 import {
   type RewardType,
   type TargetType,
@@ -275,6 +276,7 @@ function App() {
   const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS)
   const [discounts, setDiscounts] = useState<DiscountEntity[]>(MOCK_DISCOUNTS)
   const [promos, setPromos] = useState<PromoCodeEntity[]>(MOCK_PROMO_CODES)
+  const [externalOffers, setExternalOffers] = useState<ExternalOffer[]>(createSeedExternalOffers)
 
   const [screen, setScreen] = useState<Screen>(resolveScreenFromLocation)
   const [globalSearch, setGlobalSearch] = useState("")
@@ -1211,6 +1213,8 @@ function App() {
                   setDiscounts={setDiscounts}
                   promos={promos}
                   setPromos={setPromos}
+                  externalOffers={externalOffers}
+                  setExternalOffers={setExternalOffers}
                   globalSearch={globalSearch}
                   promoCreateSignal={promoCreateSignal}
                   discountCreateSignal={discountCreateSignal}
@@ -1228,7 +1232,7 @@ function App() {
               ) : null}
 
               {screen === "myPromos" ? (
-                <MyPromocodesSection discounts={discounts} promos={promos} globalSearch={globalSearch} />
+                <MyPromocodesSection discounts={discounts} promos={promos} externalOffers={externalOffers} globalSearch={globalSearch} />
               ) : null}
 
               {screen === "wheel" ? (

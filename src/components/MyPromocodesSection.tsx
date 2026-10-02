@@ -8,17 +8,18 @@ import {
   PROMO_SELLER_OPTIONS,
   formatRub,
 } from "@/admin/promoRegistry"
+import { DEMO_USER_PHONE, type ExternalOffer, getSegmentPhones } from "@/admin/externalOffers"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 
 interface MyPromocodesSectionProps {
   discounts: DiscountEntity[]
   promos: PromoCodeEntity[]
   globalSearch: string
+  externalOffers: ExternalOffer[]
 }
 
 type PromoState = "issued" | "reserved"
@@ -35,21 +36,6 @@ interface ClientPromo {
   discount?: DiscountEntity
   external?: ExternalOffer
 }
-
-interface ExternalOffer {
-  active: boolean
-  name: string
-  description: string
-  code: string
-  serviceName: string
-  serviceUrl: string
-  startDate: string
-  endDate: string
-  audience: "all" | "segment"
-  phones: string
-}
-
-const DEMO_USER_PHONE = "79000000001"
 
 function dateAfter(days: number): string {
   const date = new Date()
@@ -99,32 +85,6 @@ function profileExpiryText(entries: ClientPromo[], now: number): string | null {
   return `${benefit} сгорит через ${units}`
 }
 
-function normalizePhone(raw: string): string | null {
-  let digits = raw.replace(/\D/g, "")
-  if (digits.length === 10) digits = `7${digits}`
-  if (digits.length === 11 && digits.startsWith("8")) digits = `7${digits.slice(1)}`
-  return digits.length === 11 && digits.startsWith("7") ? digits : null
-}
-
-function getSegmentPhones(raw: string): string[] {
-  return Array.from(new Set(raw.split(/[\s,;]+/).map(normalizePhone).filter((phone): phone is string => Boolean(phone))))
-}
-
-function createExternalOffer(): ExternalOffer {
-  return {
-    active: true,
-    name: "Скидка на продукты в Близко",
-    description: "Промокод NUT10 действует только при заказе продуктов в Близко. Введите код при оформлении заказа в сервисе Близко.",
-    code: "NUT10",
-    serviceName: "Близко",
-    serviceUrl: "https://blizko.05.ru/",
-    startDate: dateAfter(-3),
-    endDate: dateAfter(30),
-    audience: "all",
-    phones: DEMO_USER_PHONE,
-  }
-}
-
 function sellerName(id: string): string {
   return PROMO_SELLER_OPTIONS.find((item) => item.id === id)?.name ?? id
 }
@@ -160,18 +120,15 @@ function discountValue(discount: DiscountEntity | undefined): string | null {
   return discount.discount_type === "percent" ? `−${discount.discount_value} %` : `−${formatRub(discount.discount_value)}`
 }
 
-export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromocodesSectionProps) {
+export function MyPromocodesSection({ discounts, promos, globalSearch, externalOffers }: MyPromocodesSectionProps) {
   const clientPreviewRef = useRef<HTMLDivElement>(null)
   const profileEntryRef = useRef<HTMLButtonElement>(null)
   const [profileEntryVisible, setProfileEntryVisible] = useState(false)
   const [profileMotionKey, setProfileMotionKey] = useState(0)
-  const [view, setView] = useState<"client" | "externalSettings">("client")
   const [demoState, setDemoState] = useState<"ready" | "empty" | "loading" | "error">("ready")
   const [authorized, setAuthorized] = useState(true)
   const [savedCommonIds, setSavedCommonIds] = useState<string[]>(["promo_001"])
   const [codeToSave, setCodeToSave] = useState("")
-  const [offerDraft, setOfferDraft] = useState<ExternalOffer>(createExternalOffer)
-  const [externalOffer, setExternalOffer] = useState<ExternalOffer>(createExternalOffer)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showLegal, setShowLegal] = useState(false)
   const [notice, setNotice] = useState("")
@@ -190,9 +147,10 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
   }, [])
 
   const discountById = useMemo(() => new Map(discounts.map((discount) => [discount.id, discount])), [discounts])
-  const segmentPhones = useMemo(() => getSegmentPhones(externalOffer.phones), [externalOffer.phones])
-  const offerInPeriod = externalOffer.startDate <= dateAfter(0) && externalOffer.endDate >= dateAfter(0)
-  const offerVisible = authorized && externalOffer.active && offerInPeriod && (externalOffer.audience === "all" || segmentPhones.includes(DEMO_USER_PHONE))
+  const visibleExternalOffers = useMemo(() => {
+    const today = dateAfter(0)
+    return externalOffers.filter((offer) => authorized && offer.active && offer.startDate <= today && offer.endDate >= today && (offer.audience === "all" || getSegmentPhones(offer.phones).includes(DEMO_USER_PHONE)))
+  }, [externalOffers, authorized])
 
   const entries = useMemo<ClientPromo[]>(() => {
     const today = dateAfter(0)
@@ -213,12 +171,10 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
       return [{ id: seed.id, code: seed.code, title: discount.name, description: discount.description, kind: "personal", status: seed.status, expiresAt: seed.expiresAt, discount }]
     })
 
-    const external: ClientPromo[] = offerVisible
-      ? [{ id: "external:blizko", code: externalOffer.code, title: externalOffer.name, description: externalOffer.description, kind: "external", status: "issued", expiresAt: externalOffer.endDate, external: externalOffer }]
-      : []
+    const external: ClientPromo[] = visibleExternalOffers.map((offer) => ({ id: `external:${offer.id}`, code: offer.code, title: offer.name, description: offer.description, kind: "external", status: "issued", expiresAt: offer.endDate, external: offer }))
 
     return [...common, ...personal, ...external]
-  }, [savedCommonIds, promos, discountById, offerVisible, externalOffer, demoHourlyExpiry, now])
+  }, [savedCommonIds, promos, discountById, visibleExternalOffers, demoHourlyExpiry, now])
 
   const selected = entries.find((entry) => entry.id === selectedId) ?? null
   const filteredEntries = entries.filter((entry) => {
@@ -229,7 +185,7 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
   const profileHint = profileExpiryText(entries, now)
 
   useEffect(() => {
-    if (view !== "client" || !showProfileEntry) {
+    if (!showProfileEntry) {
       setProfileEntryVisible(false)
       return
     }
@@ -243,7 +199,7 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
     }, { threshold: 0.15 })
     observer.observe(entry)
     return () => observer.disconnect()
-  }, [view, showProfileEntry, profileMotionKey])
+  }, [showProfileEntry, profileMotionKey])
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("code")
@@ -255,8 +211,9 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
       setSelectedId(`common:${promo.id}`)
       return
     }
-    if (code.toLowerCase() === externalOffer.code.toLowerCase() && offerVisible) setSelectedId("external:blizko")
-  }, [promos, discountById, externalOffer.code, offerVisible])
+    const external = visibleExternalOffers.find((offer) => offer.code.toLowerCase() === code.toLowerCase())
+    if (external) setSelectedId(`external:${external.id}`)
+  }, [promos, discountById, visibleExternalOffers])
 
   function saveCommonCode(rawCode: string) {
     if (!authorized) { setNotice("Войдите в аккаунт, чтобы сохранить промокод."); return }
@@ -279,45 +236,18 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
     }
   }
 
-  function saveExternalOffer() {
-    if (!offerDraft.name.trim() || !offerDraft.code.trim() || !offerDraft.description.trim() || !offerDraft.serviceName.trim()) {
-      setNotice("Заполните название, код, описание с условиями и название сервиса.")
-      return
-    }
-    if (!offerDraft.startDate || !offerDraft.endDate || offerDraft.startDate > offerDraft.endDate) {
-      setNotice("Проверьте период показа предложения.")
-      return
-    }
-    if (offerDraft.active && !offerDraft.serviceUrl.trim()) {
-      setNotice("Для активного предложения укажите ссылку на сервис.")
-      return
-    }
-    if (offerDraft.serviceUrl.trim()) {
-      try {
-        if (new URL(offerDraft.serviceUrl).protocol !== "https:") throw new Error("url")
-      } catch { setNotice("Укажите корректную HTTPS-ссылку на внешний сервис."); return }
-    }
-    setExternalOffer({ ...offerDraft, name: offerDraft.name.trim(), code: offerDraft.code.trim(), description: offerDraft.description.trim(), serviceUrl: offerDraft.serviceUrl.trim() })
-    setNotice("Предложение сохранено. Проверяйте его показ в клиентском виде.")
-  }
-
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div>
         <div>
           <h2 className="text-2xl font-semibold">Мои промокоды</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Клиентский прототип и пример настройки общего кода внешнего сервиса. Данные демонстрационные.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant={view === "client" ? "default" : "outline"} onClick={() => setView("client")}>Клиентский вид</Button>
-          <Button variant={view === "externalSettings" ? "default" : "outline"} onClick={() => setView("externalSettings")}>Внешний код</Button>
+          <p className="mt-1 text-sm text-muted-foreground">Клиентский прототип. Коды Близко настраиваются в разделе «Скидки». Данные демонстрационные.</p>
         </div>
       </div>
 
       {notice ? <div role="status" className="fixed bottom-5 right-5 z-[100] max-w-sm rounded-xl border border-red-100 bg-white px-4 py-3 text-sm font-medium text-[#8d101a] shadow-lg">{notice}</div> : null}
 
-      {view === "client" ? (
-        <>
+      <>
           <Card>
             <CardContent className="flex flex-col gap-4 pt-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -433,39 +363,7 @@ export function MyPromocodesSection({ discounts, promos, globalSearch }: MyPromo
               </>
             )}
           </div>
-        </>
-      ) : (
-        <Card>
-          <CardHeader><CardTitle>Общее предложение внешнего сервиса</CardTitle></CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            <p className="text-sm text-muted-foreground md:col-span-2">Один код для всей выбранной аудитории. Маркет показывает его, но не рассчитывает скидку и не проверяет применение в своей корзине.</p>
-            <label className="flex items-center gap-2 text-sm"><Checkbox checked={offerDraft.active} onCheckedChange={(checked) => setOfferDraft((prev) => ({ ...prev, active: checked === true }))} /> Показывать предложение</label>
-            <div />
-            {([
-              ["name", "Название предложения"], ["serviceName", "Сервис"], ["code", "Общий промокод"], ["serviceUrl", "Ссылка на сервис (HTTPS)"],
-            ] as const).map(([key, label]) => <label key={key} className="grid gap-1 text-sm font-medium">{label}<Input value={offerDraft[key]} onChange={(event) => setOfferDraft((prev) => ({ ...prev, [key]: event.target.value }))} /></label>)}
-            <label className="grid gap-1 text-sm font-medium md:col-span-2">Описание и условия для пользователя<Textarea className="min-h-28" value={offerDraft.description} onChange={(event) => setOfferDraft((prev) => ({ ...prev, description: event.target.value }))} /></label>
-            <label className="grid gap-1 text-sm font-medium">Показывать с<Input type="date" value={offerDraft.startDate} onChange={(event) => setOfferDraft((prev) => ({ ...prev, startDate: event.target.value }))} /></label>
-            <label className="grid gap-1 text-sm font-medium">Показывать до<Input type="date" value={offerDraft.endDate} onChange={(event) => setOfferDraft((prev) => ({ ...prev, endDate: event.target.value }))} /></label>
-            <label className="grid gap-1 text-sm font-medium">Аудитория
-              <select className="h-9 rounded-md border bg-white px-3" value={offerDraft.audience} onChange={(event) => setOfferDraft((prev) => ({ ...prev, audience: event.target.value as ExternalOffer["audience"] }))}>
-                <option value="all">Все авторизованные</option><option value="segment">Сегмент по телефонам</option>
-              </select>
-            </label>
-            {offerDraft.audience === "segment" ? (
-              <div className="grid gap-2 md:col-span-2">
-                <label className="grid gap-1 text-sm font-medium">Телефоны сегмента<Textarea className="min-h-24" value={offerDraft.phones} onChange={(event) => setOfferDraft((prev) => ({ ...prev, phones: event.target.value }))} placeholder="Один телефон в строке" /></label>
-                <label className="text-sm">Или загрузите CSV/TXT с номерами<Input type="file" accept=".csv,.txt,text/plain,text/csv" onChange={async (event) => { const file = event.target.files?.[0]; if (file) { const phones = await file.text(); setOfferDraft((prev) => ({ ...prev, phones })) } }} /></label>
-                <p className="text-xs text-muted-foreground">Демо-сопоставление: номеров в сегменте — {getSegmentPhones(offerDraft.phones).length}. Пустой сегмент никому не показывает код. В настоящем API номера сопоставляются с аккаунтами на backend и не отправляются клиенту.</p>
-              </div>
-            ) : null}
-            <div className="flex flex-wrap items-center gap-3 md:col-span-2">
-              <Button onClick={saveExternalOffer}>Сохранить предложение</Button>
-              <span className="text-xs text-muted-foreground">Демо-аккаунт: +7 900 000-00-01 · сейчас {offerVisible ? "видит" : "не видит"} код.</span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      </>
 
       <Dialog open={Boolean(selected && authorized)} onOpenChange={(open) => { if (!open) { setSelectedId(null); setShowLegal(false) } }}>
         <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto rounded-2xl">

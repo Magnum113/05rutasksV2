@@ -38,6 +38,8 @@ import {
   summarizeTitleRules,
 } from "@/admin/promoRegistry"
 import { formatDate, parseDate } from "@/admin/utils"
+import { type ExternalOffer } from "@/admin/externalOffers"
+import { ExternalOffersSection } from "@/components/ExternalOffersSection"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -73,6 +75,8 @@ interface PromoCodesSectionProps {
   setDiscounts: Dispatch<SetStateAction<DiscountEntity[]>>
   promos: PromoCodeEntity[]
   setPromos: Dispatch<SetStateAction<PromoCodeEntity[]>>
+  externalOffers: ExternalOffer[]
+  setExternalOffers: Dispatch<SetStateAction<ExternalOffer[]>>
   globalSearch: string
   promoCreateSignal: number
   discountCreateSignal: number
@@ -289,7 +293,7 @@ function dedupeCategorySelection(
 }
 
 export function PromoCodesSection(props: PromoCodesSectionProps) {
-  const { mode, discounts, setDiscounts, promos, setPromos, globalSearch, promoCreateSignal, discountCreateSignal, onNavigate } = props
+  const { mode, discounts, setDiscounts, promos, setPromos, externalOffers, setExternalOffers, globalSearch, promoCreateSignal, discountCreateSignal, onNavigate } = props
 
 
   const [discountViewMode, setDiscountViewMode] = useState<"list" | "form">("list")
@@ -979,6 +983,8 @@ export function PromoCodesSection(props: PromoCodesSectionProps) {
 
                 <Button onClick={startCreateDiscount}>Создать скидку</Button>
               </div>
+
+              <ExternalOffersSection offers={externalOffers} setOffers={setExternalOffers} />
 
               <Card>
                 <CardHeader>
