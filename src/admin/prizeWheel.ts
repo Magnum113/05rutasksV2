@@ -1,12 +1,9 @@
 export type WheelRewardType = "bonus" | "activity_points" | "promocode" | "physical_prize"
 export type WheelPromocodeMode = "personal" | "shared"
 export type WheelChannel = "web" | "app_webview"
-export type WheelSpinStatus =
-  | "claim_pending"
-  | "reward_issuing"
-  | "reward_issued"
-  | "reward_failed"
-  | "claim_expired"
+export type WheelSpinStatus = "reward_issuing" | "reward_issued" | "reward_failed"
+// Only selects a demo of the iteration; not a new setting in the product API.
+export type WheelPrototypeVersion = "mvp" | "full"
 
 export interface WheelPrize {
   id: string
@@ -38,17 +35,10 @@ export interface WheelConfiguration {
   title: string
   description: string
   wheel_visibility_enabled: boolean
-  initial_free_spins: 5
-  claim_ttl_days: 7
-  audience: "all_authorized" | "test_group"
   channels: WheelChannel[]
   game_rules_url: string
   config_version: number
   prizes: WheelPrize[]
-  participants_count: number
-  spins_count: number
-  rewards_issued_count: number
-  errors_count: number
 }
 
 export interface WheelSpinRecord {
@@ -57,12 +47,16 @@ export interface WheelSpinRecord {
   user_id: string
   phone: string
   prize_id: string
+  prize_display_name: string
   reward_type: WheelRewardType
   status: WheelSpinStatus
   created_at: string
-  claim_until: string
   external_operation_id: string | null
   retries: number
+  error_message: string | null
+  payment_method: "free_spin" | "activity_points"
+  points_spent: number
+  points_refunded: number
 }
 
 export const WHEEL_REWARD_TYPE_LABELS: Record<WheelRewardType, string> = {
@@ -73,11 +67,9 @@ export const WHEEL_REWARD_TYPE_LABELS: Record<WheelRewardType, string> = {
 }
 
 export const WHEEL_SPIN_STATUS_LABELS: Record<WheelSpinStatus, string> = {
-  claim_pending: "Ожидает получения",
   reward_issuing: "Награда выдаётся",
   reward_issued: "Награда выдана",
   reward_failed: "Ошибка выдачи",
-  claim_expired: "Срок получения истёк",
 }
 
 export const WHEEL_CHANNEL_LABELS: Record<WheelChannel, string> = {
@@ -85,27 +77,22 @@ export const WHEEL_CHANNEL_LABELS: Record<WheelChannel, string> = {
   app_webview: "WebView приложения",
 }
 
+export const MVP_WHEEL_RULES_URL = "https://files.kaiten.ru/d57f2699-12e8-47eb-a8b1-f4be85f6791c.pdf"
+
 export const MOCK_WHEEL_CONFIGURATION: WheelConfiguration = {
   id: "prize_wheel",
-  title: "Крутите колесо и забирайте приз",
-  description: "Пять гарантированных призов для каждого авторизованного пользователя.",
+  title: "Колесо призов",
+  description: "Крутите колесо и выигрывайте призы.",
   wheel_visibility_enabled: true,
-  initial_free_spins: 5,
-  claim_ttl_days: 7,
-  audience: "all_authorized",
   channels: ["web", "app_webview"],
-  game_rules_url: "/game-rules/prize-wheel",
+  game_rules_url: MVP_WHEEL_RULES_URL,
   config_version: 4,
-  participants_count: 4281,
-  spins_count: 15420,
-  rewards_issued_count: 11166,
-  errors_count: 12,
   prizes: [
       {
         id: "prize_bonus_100",
         display_name: "100 бонусов",
-        description: "Начислим после получения. Срок действия определяется правилами бонусной программы.",
-        image_url: "https://images.unsplash.com/photo-1607082349566-187342175e2f?auto=format&fit=crop&w=400&q=80",
+        description: "Начислим бонусы автоматически. Условия использования — в правилах бонусной программы.",
+        image_url: "/prize-wheel/bonus-100.webp",
         action_button_text: "Перейти в каталог",
         action_button_url: "/catalog",
         display_from: "2026-08-12T09:00",
@@ -129,7 +116,7 @@ export const MOCK_WHEEL_CONFIGURATION: WheelConfiguration = {
         id: "prize_personal_10",
         display_name: "Скидка 10%",
         description: "На бытовую технику. Промокод действует 7 дней с момента получения.",
-        image_url: "https://images.unsplash.com/photo-1607083206968-13611e3d76db?auto=format&fit=crop&w=400&q=80",
+        image_url: "/prize-wheel/promo-10.webp",
         action_button_text: "Открыть каталог",
         action_button_url: "/catalog/bytovaya-tehnika",
         display_from: "2026-08-12T09:00",
@@ -153,8 +140,8 @@ export const MOCK_WHEEL_CONFIGURATION: WheelConfiguration = {
         id: "prize_bonus_10000",
         display_name: "10 000 бонусов",
         description: "Главный бонусный приз колеса.",
-        image_url: "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=400&q=80",
-        action_button_text: "Забрать приз",
+        image_url: "/prize-wheel/bonus-10000.webp",
+        action_button_text: "Открыть бонусный счёт",
         action_button_url: "/profile/bonuses",
         display_from: "2026-08-12T09:00",
         display_to: "2026-12-31T23:59",
@@ -183,12 +170,16 @@ export const MOCK_WHEEL_SPINS: WheelSpinRecord[] = [
     user_id: "user_12345",
     phone: "+7 928 000-11-22",
     prize_id: "prize_personal_10",
+    prize_display_name: "Скидка 10%",
     reward_type: "promocode",
     status: "reward_issued",
     created_at: "2026-08-12T10:42:00",
-    claim_until: "2026-08-19T10:42",
     external_operation_id: "pc_GIFT-9F2KQ7",
     retries: 0,
+    error_message: null,
+    payment_method: "free_spin",
+    points_spent: 0,
+    points_refunded: 0,
   },
   {
     id: "spin_9c48d2",
@@ -196,12 +187,16 @@ export const MOCK_WHEEL_SPINS: WheelSpinRecord[] = [
     user_id: "user_20481",
     phone: "+7 963 555-84-19",
     prize_id: "prize_bonus_100",
+    prize_display_name: "100 бонусов",
     reward_type: "bonus",
     status: "reward_issuing",
     created_at: "2026-08-12T11:08:00",
-    claim_until: "2026-08-19T11:08",
     external_operation_id: "1c_op_882013",
     retries: 1,
+    error_message: null,
+    payment_method: "free_spin",
+    points_spent: 0,
+    points_refunded: 0,
   },
   {
     id: "spin_b19e44",
@@ -209,11 +204,162 @@ export const MOCK_WHEEL_SPINS: WheelSpinRecord[] = [
     user_id: "user_44190",
     phone: "+7 918 700-30-90",
     prize_id: "prize_bonus_10000",
+    prize_display_name: "10 000 бонусов",
     reward_type: "bonus",
     status: "reward_failed",
     created_at: "2026-08-12T12:03:00",
-    claim_until: "2026-08-19T12:03",
     external_operation_id: "1c_op_882904",
     retries: 3,
+    error_message: "1С временно недоступна. Автоматическая выдача будет повторена.",
+    payment_method: "free_spin",
+    points_spent: 0,
+    points_refunded: 0,
   },
 ]
+
+export const MOCK_FULL_WHEEL_CONFIGURATION: WheelConfiguration = {
+  ...MOCK_WHEEL_CONFIGURATION,
+  // No approved PDF for iteration 2 yet. Do not reuse the rules of five free spins.
+  game_rules_url: "",
+  prizes: [
+    ...MOCK_WHEEL_CONFIGURATION.prizes,
+    {
+      ...MOCK_WHEEL_CONFIGURATION.prizes[0],
+      id: "prize_points_30",
+      display_name: "30 очков активности",
+      description: "Очки начисляются автоматически на общий баланс заданий и колеса.",
+      image_url: "/prize-wheel/activity-points.svg",
+      action_button_text: "",
+      action_button_url: "",
+      reward_type: "activity_points",
+      one_c_marketing_event_id: null,
+      bonus_amount: null,
+      points_amount: 30,
+      points_ttl_days: 30,
+      selection_weight: 500,
+      issued_count: 10,
+      visual_order: 4,
+    },
+    {
+      ...MOCK_WHEEL_CONFIGURATION.prizes[0],
+      id: "prize_headphones",
+      display_name: "Наушники",
+      description: "Получите приз в магазине по адресу Шамиля, 5. Для уточнения порядка получения позвоните по телефону 8 800 511 05 05.",
+      image_url: "/prize-wheel/physical-headphones.svg",
+      action_button_text: "",
+      action_button_url: "",
+      reward_type: "physical_prize",
+      one_c_marketing_event_id: null,
+      bonus_amount: null,
+      selection_weight: 1,
+      total_stock: 5,
+      issued_count: 1,
+      repeatable_per_user: false,
+      visual_order: 5,
+    },
+  ],
+}
+
+export const MOCK_FULL_WHEEL_SPINS: WheelSpinRecord[] = [
+  ...MOCK_WHEEL_SPINS,
+  {
+    ...MOCK_WHEEL_SPINS[0],
+    id: "spin_points_demo",
+    prize_id: "prize_points_30",
+    prize_display_name: "30 очков активности",
+    reward_type: "activity_points",
+    payment_method: "activity_points",
+    points_spent: 10,
+    external_operation_id: "ledger_wheel_1001",
+  },
+  {
+    ...MOCK_WHEEL_SPINS[0],
+    id: "spin_physical_demo",
+    prize_id: "prize_headphones",
+    prize_display_name: "Наушники",
+    reward_type: "physical_prize",
+    payment_method: "activity_points",
+    points_spent: 10,
+    external_operation_id: null,
+  },
+  {
+    ...MOCK_WHEEL_SPINS[2],
+    id: "spin_refund_demo",
+    external_operation_id: "1c_op_refund_demo",
+    payment_method: "activity_points",
+    points_spent: 10,
+    points_refunded: 10,
+    error_message: "Выдать награду окончательно невозможно. 10 очков возвращены; выдача прекращена.",
+  },
+]
+
+export function cloneWheelConfiguration(configuration: WheelConfiguration): WheelConfiguration {
+  return structuredClone(configuration)
+}
+
+type PrototypeStorage = Pick<Storage, "getItem" | "setItem">
+const STORAGE_PREFIX = "05ru-wheel-admin-prototype-v2"
+const LEGACY_DEMO_IMAGES: Record<string, string> = {
+  "https://images.unsplash.com/photo-1607082349566-187342175e2f?auto=format&fit=crop&w=400&q=80": "/prize-wheel/bonus-100.webp",
+  "https://images.unsplash.com/photo-1607083206968-13611e3d76db?auto=format&fit=crop&w=400&q=80": "/prize-wheel/promo-10.webp",
+  "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=400&q=80": "/prize-wheel/bonus-10000.webp",
+}
+
+function browserStorage(): PrototypeStorage | undefined {
+  try {
+    return typeof window === "undefined" ? undefined : window.localStorage
+  } catch {
+    return undefined
+  }
+}
+
+export function loadWheelConfiguration(version: WheelPrototypeVersion, storage = browserStorage()): WheelConfiguration {
+  const fallback = version === "full" ? MOCK_FULL_WHEEL_CONFIGURATION : MOCK_WHEEL_CONFIGURATION
+  let configuration = cloneWheelConfiguration(fallback)
+  try {
+    const saved = storage?.getItem(`${STORAGE_PREFIX}:${version}`)
+    if (saved) {
+      const parsed = JSON.parse(saved) as WheelConfiguration
+      if (parsed.id === "prize_wheel" && Array.isArray(parsed.prizes) && Array.isArray(parsed.channels)) {
+        configuration = parsed
+      }
+    }
+  } catch {
+    // A damaged demo cache must not prevent opening the editor.
+  }
+  // Drop legacy mock counters: the backend PRD does not promise these aggregates.
+  for (const key of ["participants_count", "spins_count", "rewards_issued_count", "errors_count"]) {
+    Reflect.deleteProperty(configuration, key)
+  }
+  // Replace only the old sample photos; uploaded or custom images are preserved.
+  configuration.prizes = configuration.prizes.map((prize) => ({
+    ...prize, image_url: LEGACY_DEMO_IMAGES[prize.image_url] ?? prize.image_url,
+  }))
+  try {
+    const visible = storage?.getItem(`${STORAGE_PREFIX}:visibility`)
+    if (visible === "true" || visible === "false") configuration.wheel_visibility_enabled = visible === "true"
+  } catch {
+    // Visibility is independent of draft validation and draft cache errors.
+  }
+  return configuration
+}
+
+export function saveWheelConfiguration(configuration: WheelConfiguration, version: WheelPrototypeVersion, storage = browserStorage()): boolean {
+  try {
+    if (!storage) return false
+    storage.setItem(`${STORAGE_PREFIX}:${version}`, JSON.stringify(configuration))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function saveWheelVisibility(enabled: boolean, storage = browserStorage()): boolean {
+  try {
+    if (!storage) return false
+    storage.setItem(`${STORAGE_PREFIX}:visibility`, String(enabled))
+    return true
+  } catch {
+    return false
+  }
+}
