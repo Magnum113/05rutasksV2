@@ -17,7 +17,6 @@ export interface WheelPrize {
   selection_weight: number
   total_stock: number | null
   repeatable_per_user: boolean
-  issued_count: number
   status: "active" | "inactive"
   visual_order: number
   reward_type: WheelRewardType
@@ -45,14 +44,12 @@ export interface WheelSpinRecord {
   id: string
   config_version: number
   user_id: string
-  phone: string
   prize_id: string
   prize_display_name: string
   reward_type: WheelRewardType
   status: WheelSpinStatus
   created_at: string
   external_operation_id: string | null
-  retries: number
   error_message: string | null
   payment_method: "free_spin" | "activity_points"
   points_spent: number
@@ -100,7 +97,6 @@ export const MOCK_WHEEL_CONFIGURATION: WheelConfiguration = {
         selection_weight: 5000,
         total_stock: null,
         repeatable_per_user: true,
-        issued_count: 6180,
         status: "active",
         visual_order: 1,
         reward_type: "bonus",
@@ -124,7 +120,6 @@ export const MOCK_WHEEL_CONFIGURATION: WheelConfiguration = {
         selection_weight: 2499,
         total_stock: null,
         repeatable_per_user: true,
-        issued_count: 4985,
         status: "active",
         visual_order: 2,
         reward_type: "promocode",
@@ -148,7 +143,6 @@ export const MOCK_WHEEL_CONFIGURATION: WheelConfiguration = {
         selection_weight: 1,
         total_stock: 3,
         repeatable_per_user: true,
-        issued_count: 1,
         status: "active",
         visual_order: 3,
         reward_type: "bonus",
@@ -168,14 +162,12 @@ export const MOCK_WHEEL_SPINS: WheelSpinRecord[] = [
     id: "spin_8f12a1",
     config_version: 3,
     user_id: "user_12345",
-    phone: "+7 928 000-11-22",
     prize_id: "prize_personal_10",
     prize_display_name: "Скидка 10%",
     reward_type: "promocode",
     status: "reward_issued",
     created_at: "2026-08-12T10:42:00",
-    external_operation_id: "pc_GIFT-9F2KQ7",
-    retries: 0,
+    external_operation_id: "pc_op_1001",
     error_message: null,
     payment_method: "free_spin",
     points_spent: 0,
@@ -185,14 +177,12 @@ export const MOCK_WHEEL_SPINS: WheelSpinRecord[] = [
     id: "spin_9c48d2",
     config_version: 3,
     user_id: "user_20481",
-    phone: "+7 963 555-84-19",
     prize_id: "prize_bonus_100",
     prize_display_name: "100 бонусов",
     reward_type: "bonus",
     status: "reward_issuing",
     created_at: "2026-08-12T11:08:00",
     external_operation_id: "1c_op_882013",
-    retries: 1,
     error_message: null,
     payment_method: "free_spin",
     points_spent: 0,
@@ -202,14 +192,12 @@ export const MOCK_WHEEL_SPINS: WheelSpinRecord[] = [
     id: "spin_b19e44",
     config_version: 3,
     user_id: "user_44190",
-    phone: "+7 918 700-30-90",
     prize_id: "prize_bonus_10000",
     prize_display_name: "10 000 бонусов",
     reward_type: "bonus",
     status: "reward_failed",
     created_at: "2026-08-12T12:03:00",
     external_operation_id: "1c_op_882904",
-    retries: 3,
     error_message: "1С временно недоступна. Автоматическая выдача будет повторена.",
     payment_method: "free_spin",
     points_spent: 0,
@@ -237,7 +225,6 @@ export const MOCK_FULL_WHEEL_CONFIGURATION: WheelConfiguration = {
       points_amount: 30,
       points_ttl_days: 30,
       selection_weight: 500,
-      issued_count: 10,
       visual_order: 4,
     },
     {
@@ -253,7 +240,6 @@ export const MOCK_FULL_WHEEL_CONFIGURATION: WheelConfiguration = {
       bonus_amount: null,
       selection_weight: 1,
       total_stock: 5,
-      issued_count: 1,
       repeatable_per_user: false,
       visual_order: 5,
     },
@@ -294,7 +280,26 @@ export const MOCK_FULL_WHEEL_SPINS: WheelSpinRecord[] = [
 ]
 
 export function cloneWheelConfiguration(configuration: WheelConfiguration): WheelConfiguration {
-  return structuredClone(configuration)
+  const copy = structuredClone(configuration)
+  // Migrate old local demo data; these fields are not part of the PRD configuration.
+  for (const key of ["participants_count", "spins_count", "rewards_issued_count", "errors_count", "claim_ttl_days", "audience", "initial_free_spins"]) {
+    Reflect.deleteProperty(copy, key)
+  }
+  for (const prize of copy.prizes) Reflect.deleteProperty(prize, "issued_count")
+  return copy
+}
+
+// Stand-in for the backend's read-only basic probability response (backend PRD §7).
+// There is no live API in this prototype. Do not copy this calculation into the real frontend.
+export function getMockBaseProbabilities(prizes: WheelPrize[], now = new Date()): Record<string, number> {
+  const available = prizes.filter((prize) =>
+    prize.status === "active" && new Date(prize.display_from) <= now && now <= new Date(prize.display_to) &&
+    (prize.total_stock === null || prize.total_stock > 0),
+  )
+  const sum = available.reduce((total, prize) => total + prize.selection_weight, 0)
+  return Object.fromEntries(prizes.map((prize) => [prize.id,
+    sum > 0 && available.includes(prize) ? prize.selection_weight / sum * 100 : 0,
+  ]))
 }
 
 type PrototypeStorage = Pick<Storage, "getItem" | "setItem">
@@ -321,15 +326,11 @@ export function loadWheelConfiguration(version: WheelPrototypeVersion, storage =
     if (saved) {
       const parsed = JSON.parse(saved) as WheelConfiguration
       if (parsed.id === "prize_wheel" && Array.isArray(parsed.prizes) && Array.isArray(parsed.channels)) {
-        configuration = parsed
+        configuration = cloneWheelConfiguration(parsed)
       }
     }
   } catch {
     // A damaged demo cache must not prevent opening the editor.
-  }
-  // Drop legacy mock counters: the backend PRD does not promise these aggregates.
-  for (const key of ["participants_count", "spins_count", "rewards_issued_count", "errors_count"]) {
-    Reflect.deleteProperty(configuration, key)
   }
   // Replace only the old sample photos; uploaded or custom images are preserved.
   configuration.prizes = configuration.prizes.map((prize) => ({
@@ -347,7 +348,7 @@ export function loadWheelConfiguration(version: WheelPrototypeVersion, storage =
 export function saveWheelConfiguration(configuration: WheelConfiguration, version: WheelPrototypeVersion, storage = browserStorage()): boolean {
   try {
     if (!storage) return false
-    storage.setItem(`${STORAGE_PREFIX}:${version}`, JSON.stringify(configuration))
+    storage.setItem(`${STORAGE_PREFIX}:${version}`, JSON.stringify(cloneWheelConfiguration(configuration)))
     return true
   } catch {
     return false

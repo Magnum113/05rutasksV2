@@ -9,7 +9,7 @@ const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.Modu
 const {
   MOCK_WHEEL_CONFIGURATION, MOCK_FULL_WHEEL_CONFIGURATION,
   MOCK_WHEEL_SPINS, MOCK_FULL_WHEEL_SPINS, WHEEL_SPIN_STATUS_LABELS,
-  cloneWheelConfiguration, loadWheelConfiguration, saveWheelConfiguration, saveWheelVisibility,
+  cloneWheelConfiguration, loadWheelConfiguration, saveWheelConfiguration, saveWheelVisibility, getMockBaseProbabilities,
 } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`)
 
 function storage() {
@@ -110,4 +110,58 @@ test('unsupported aggregate counters are absent, including previously saved demo
     assert.equal(key in MOCK_FULL_WHEEL_CONFIGURATION, false)
     assert.equal(key in loaded, false)
   }
+})
+
+// Traceability: MVP PRD §§6–11, backend MVP §§2–3,7,9; full PRD §§5–7.
+// These are prototype property names, not a claim about an implemented API schema.
+test('configuration and registry expose only PRD-backed information', () => {
+  const configKeys = ['id', 'title', 'description', 'wheel_visibility_enabled', 'channels', 'game_rules_url', 'config_version', 'prizes'].sort()
+  const prizeKeys = ['id', 'display_name', 'description', 'image_url', 'action_button_text', 'action_button_url', 'display_from', 'display_to', 'selection_weight', 'total_stock', 'repeatable_per_user', 'status', 'visual_order', 'reward_type', 'one_c_marketing_event_id', 'bonus_amount', 'points_amount', 'points_ttl_days', 'promocode_mode', 'personal_promocode_template_key', 'shared_promocode_code'].sort()
+  const spinKeys = ['id', 'config_version', 'user_id', 'prize_id', 'prize_display_name', 'reward_type', 'status', 'created_at', 'external_operation_id', 'error_message', 'payment_method', 'points_spent', 'points_refunded'].sort()
+  for (const config of [MOCK_WHEEL_CONFIGURATION, MOCK_FULL_WHEEL_CONFIGURATION]) {
+    assert.deepEqual(Object.keys(config).sort(), configKeys)
+    for (const prize of config.prizes) assert.deepEqual(Object.keys(prize).sort(), prizeKeys)
+  }
+  for (const spin of MOCK_FULL_WHEEL_SPINS) assert.deepEqual(Object.keys(spin).sort(), spinKeys)
+})
+
+test('saved legacy demo fields cannot reappear after reload', () => {
+  const cache = storage()
+  const oldDemo = { ...cloneWheelConfiguration(MOCK_WHEEL_CONFIGURATION), audience: 'test_group', claim_ttl_days: 7, initial_free_spins: 5 }
+  oldDemo.prizes[0].issued_count = 6180
+  // Seed the legacy cache directly to test loading as well as serialization.
+  cache.setItem('05ru-wheel-admin-prototype-v2:mvp', JSON.stringify(oldDemo))
+  const loaded = loadWheelConfiguration('mvp', cache)
+  for (const key of ['audience', 'claim_ttl_days', 'initial_free_spins']) assert.equal(key in loaded, false)
+  assert.equal('issued_count' in loaded.prizes[0], false)
+  saveWheelConfiguration(oldDemo, 'mvp', cache)
+  const saved = JSON.parse(cache.getItem('05ru-wheel-admin-prototype-v2:mvp'))
+  assert.equal('issued_count' in saved.prizes[0], false)
+  assert.equal('audience' in saved, false)
+  assert.equal(oldDemo.prizes[0].issued_count, 6180, 'migration must not mutate caller data')
+})
+
+test('zero stock is unavailable and backend probability mock respects period, status and weights', () => {
+  const config = cloneWheelConfiguration(MOCK_WHEEL_CONFIGURATION)
+  const now = new Date('2026-10-15T12:00:00')
+  config.prizes[0].total_stock = 0
+  config.prizes[1].selection_weight = 3
+  config.prizes[2].selection_weight = 1
+  const probabilities = getMockBaseProbabilities(config.prizes, now)
+  assert.equal(probabilities[config.prizes[0].id], 0)
+  assert.equal(probabilities[config.prizes[1].id], 75)
+  assert.equal(probabilities[config.prizes[2].id], 25)
+  config.prizes[1].status = 'inactive'
+  config.prizes[2].display_to = '2026-10-14T23:59'
+  assert.ok(Object.values(getMockBaseProbabilities(config.prizes, now)).every((value) => value === 0))
+})
+
+test('admin has no unsupported registry counters, phone, filters or second image field', () => {
+  const admin = readFileSync(new URL('../src/components/PrizeWheelSection.tsx', import.meta.url), 'utf8')
+  for (const forbidden of ['spin.phone', 'spin.retries', 'spinFilters', 'issued_count', 'effectiveProbability', 'claim_until', 'claim_ttl_days']) {
+    assert.equal(admin.includes(forbidden), false, forbidden)
+  }
+  assert.equal(admin.includes('value={selectedPrize.image_url}'), false)
+  assert.ok(admin.includes('readOnly'), 'the five-spin rule is not editable')
+  assert.ok(admin.includes('value={form.title}') && admin.includes('value={form.description}'), 'MVP PRD §§6,11 explicitly require editable screen texts')
 })

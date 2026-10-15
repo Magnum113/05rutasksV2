@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, ExternalLink, Eye, EyeOff, Gift, Plus, RotateCc
 
 import {
   cloneWheelConfiguration,
+  getMockBaseProbabilities,
   loadWheelConfiguration,
   saveWheelConfiguration,
   saveWheelVisibility,
@@ -42,11 +43,6 @@ interface PrizeWheelSectionProps {
 
 type WheelTab = "settings" | "spins"
 
-interface SpinFilters {
-  status: "all" | WheelSpinStatus
-  rewardType: "all" | WheelRewardType
-}
-
 interface SectionFlash {
   type: "success" | "error" | "info"
   text: string
@@ -58,14 +54,7 @@ const SPIN_STATUS_VARIANT: Record<WheelSpinStatus, "default" | "secondary" | "ou
   reward_failed: "destructive",
 }
 
-function toDateTimeInput(date: Date): string {
-  const offset = date.getTimezoneOffset()
-  return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16)
-}
-
 function createPrize(configuration: WheelConfiguration): WheelPrize {
-  const start = new Date()
-  const end = new Date(start.getTime() + 30 * 86400000)
   const order = configuration.prizes.length + 1
   return {
     id: `prize_${Math.random().toString(36).slice(2, 9)}`,
@@ -74,12 +63,11 @@ function createPrize(configuration: WheelConfiguration): WheelPrize {
     image_url: "",
     action_button_text: "",
     action_button_url: "",
-    display_from: toDateTimeInput(start),
-    display_to: toDateTimeInput(end),
+    display_from: "",
+    display_to: "",
     selection_weight: 100,
     total_stock: null,
     repeatable_per_user: true,
-    issued_count: 0,
     status: "active",
     visual_order: order,
     reward_type: "promocode",
@@ -104,27 +92,6 @@ function isPublicHttpsUrl(value: string): boolean {
   } catch {
     return false
   }
-}
-
-function effectiveProbability(prize: WheelPrize, prizes: WheelPrize[]): number {
-  const now = new Date()
-  const available = prizes.filter((item) => {
-    const displayFrom = parseDate(item.display_from)
-    const displayTo = parseDate(item.display_to)
-    return (
-      item.status === "active" &&
-      displayFrom !== null &&
-      displayTo !== null &&
-      displayFrom <= now &&
-      now <= displayTo &&
-      (item.total_stock === null || item.issued_count < item.total_stock)
-    )
-  })
-  const sum = available.reduce((acc, item) => acc + item.selection_weight, 0)
-  if (sum <= 0 || !available.some((item) => item.id === prize.id)) {
-    return 0
-  }
-  return (prize.selection_weight / sum) * 100
 }
 
 function formatProbability(value: number): string {
@@ -201,7 +168,7 @@ export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFull
   const [formErrors, setFormErrors] = useState<string[]>([])
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [flash, setFlash] = useState<SectionFlash | null>(null)
-  const [spinFilters, setSpinFilters] = useState<SpinFilters>({ status: "all", rewardType: "all" })
+  const baseProbabilities = useMemo(() => getMockBaseProbabilities(form.prizes), [form.prizes])
 
   useEffect(() => {
     if (Object.keys(fieldErrors).length > 0) sectionRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus()
@@ -224,20 +191,13 @@ export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFull
   const filteredSpins = useMemo(
     () =>
       (isFullVersion ? MOCK_FULL_WHEEL_SPINS : MOCK_WHEEL_SPINS).filter((spin) => {
-        const prize = allPrizesById.get(spin.prize_id)
-        const haystack = `${spin.id} ${spin.user_id} ${spin.phone} ${spin.prize_display_name} ${prize?.display_name ?? ""}`.toLowerCase()
+        const haystack = `${spin.id} ${spin.user_id}`.toLowerCase()
         if (query && !haystack.includes(query)) {
-          return false
-        }
-        if (spinFilters.status !== "all" && spin.status !== spinFilters.status) {
-          return false
-        }
-        if (spinFilters.rewardType !== "all" && spin.reward_type !== spinFilters.rewardType) {
           return false
         }
         return true
       }),
-    [allPrizesById, query, spinFilters, isFullVersion],
+    [query, isFullVersion],
   )
 
   function switchPrototypeVersion(version: WheelPrototypeVersion) {
@@ -255,7 +215,6 @@ export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFull
     setSelectedPrizeId(null)
     setFormErrors([])
     setFieldErrors({})
-    setSpinFilters({ status: "all", rewardType: "all" })
     setFlash(null)
   }
 
@@ -303,6 +262,18 @@ export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFull
     }))
   }
 
+  function setPromocodeMode(prizeId: string, mode: WheelPromocodeMode) {
+    setForm((previous) => ({
+      ...previous,
+      prizes: previous.prizes.map((prize) => prize.id === prizeId ? {
+        ...prize,
+        promocode_mode: mode,
+        personal_promocode_template_key: mode === "personal" ? prize.personal_promocode_template_key : null,
+        shared_promocode_code: mode === "shared" ? prize.shared_promocode_code : null,
+      } : prize),
+    }))
+  }
+
   function addPrize() {
     const prize = createPrize(form)
     setForm((previous) => ({ ...previous, prizes: [...previous.prizes, prize] }))
@@ -343,8 +314,8 @@ export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFull
 
     if (!form.title.trim()) addError("title", "Заголовок для пользователя обязателен")
     if (!form.description.trim()) addError("description", "Описание колеса обязательно")
-    if (!isPublicHttpsUrl(form.game_rules_url)) addError("game_rules_url", "Укажите публичную HTTPS-ссылку на PDF правил")
-    if (isFullVersion && form.game_rules_url.trim() === MVP_WHEEL_RULES_URL) addError("game_rules_url", "Укажите PDF полной версии, а не правила пяти бесплатных вращений")
+    if ((publish || form.game_rules_url.trim()) && !isPublicHttpsUrl(form.game_rules_url)) addError("game_rules_url", "Укажите публичную HTTPS-ссылку на PDF правил")
+    if (publish && isFullVersion && form.game_rules_url.trim() === MVP_WHEEL_RULES_URL) addError("game_rules_url", "Укажите PDF полной версии, а не правила пяти бесплатных вращений")
     if (form.channels.length === 0) addError("channels", "Выберите хотя бы один канал")
     if (publish && form.prizes.length === 0) addError("prizes", "Для публикации добавьте хотя бы один приз")
 
@@ -365,8 +336,8 @@ export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFull
       if (!Number.isInteger(prize.selection_weight) || prize.selection_weight <= 0) {
         addError(`${prefix}.selection_weight`, `${label}: вес должен быть целым числом больше 0`)
       }
-      if (prize.total_stock !== null && (!Number.isInteger(prize.total_stock) || prize.total_stock <= 0)) {
-        addError(`${prefix}.total_stock`, `${label}: запас должен быть пустым или целым числом больше 0`)
+      if (prize.total_stock !== null && (!Number.isInteger(prize.total_stock) || prize.total_stock < 0)) {
+        addError(`${prefix}.total_stock`, `${label}: запас должен быть пустым или целым числом не меньше 0`)
       }
       const displayFrom = parseDate(prize.display_from)
       const displayTo = parseDate(prize.display_to)
@@ -398,8 +369,8 @@ export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFull
         if (publish && !isFullVersion) {
           addError(`${prefix}.reward_type`, `${label}: физические призы станут доступны только в полной версии`)
         }
-        if (prize.total_stock === null || !Number.isInteger(prize.total_stock) || prize.total_stock <= 0) {
-          addError(`${prefix}.total_stock`, `${label}: для физического приза обязателен запас больше 0`)
+        if (prize.total_stock === null || !Number.isInteger(prize.total_stock) || prize.total_stock < 0) {
+          addError(`${prefix}.total_stock`, `${label}: для физического приза укажите запас; 0 — призы закончились`)
         }
       }
 
@@ -510,6 +481,7 @@ export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFull
           <div>
             <p className="font-semibold">Режим просмотра прототипа</p>
             <p className="mt-1 text-sm text-muted-foreground">Это примеры двух итераций, не отдельные колёса или настройка продукта. Изменения сохраняются в этом браузере.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Backend не подключён. Реестр, вероятности и результаты сохранения демонстрационные.</p>
           </div>
           <div className="sm:w-64">
             <SelectField label="Версия прототипа" value={prototypeVersion}
@@ -555,28 +527,7 @@ export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFull
       {tab === "spins" ? (
         <>
           <Card>
-            <CardHeader><CardTitle>Фильтры реестра</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <SelectField
-                label="Тип награды"
-                value={spinFilters.rewardType}
-                options={[
-                  { value: "all", label: "Все типы" },
-                  ...Object.entries(WHEEL_REWARD_TYPE_LABELS)
-                    .filter(([value]) => isFullVersion || (value !== "activity_points" && value !== "physical_prize"))
-                    .map(([value, label]) => ({ value, label })),
-                ]}
-                onChange={(value) => setSpinFilters((previous) => ({ ...previous, rewardType: value as SpinFilters["rewardType"] }))}
-              />
-              <SelectField
-                label="Статус"
-                value={spinFilters.status}
-                options={[{ value: "all", label: "Все статусы" }, ...Object.entries(WHEEL_SPIN_STATUS_LABELS).map(([value, label]) => ({ value, label }))]}
-                onChange={(value) => setSpinFilters((previous) => ({ ...previous, status: value as SpinFilters["status"] }))}
-              />
-            </CardContent>
-          </Card>
-          <Card>
+            <CardHeader><CardTitle>Реестр вращений</CardTitle><p className="text-sm text-muted-foreground">Поиск по user_id или spin_id — через поле «Глобальный поиск».</p></CardHeader>
             <CardContent className="pt-6">
               <div className="rounded-md border bg-card">
                 <Table>
@@ -587,7 +538,7 @@ export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFull
                       <TableHead>Приз</TableHead>
                       <TableHead>Версия</TableHead>
                       <TableHead>Статус</TableHead>
-                      <TableHead>Операция / повторы</TableHead>
+                      <TableHead>Внешняя операция</TableHead>
                       {isFullVersion ? <TableHead>Оплата / очки</TableHead> : null}
                       <TableHead>Ошибка выдачи</TableHead>
                     </TableRow>
@@ -598,11 +549,11 @@ export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFull
                       return (
                         <TableRow key={spin.id}>
                           <TableCell><p className="font-semibold">{spin.id}</p><p className="text-xs text-muted-foreground">{formatDateTime(spin.created_at)}</p></TableCell>
-                          <TableCell><p>{spin.user_id}</p><p className="text-xs text-muted-foreground">{spin.phone}</p></TableCell>
+                          <TableCell>{spin.user_id}</TableCell>
                           <TableCell><p className="font-medium">{spin.prize_display_name || prize?.display_name || spin.prize_id}</p><Badge variant="outline">{WHEEL_REWARD_TYPE_LABELS[spin.reward_type]}</Badge></TableCell>
                           <TableCell>v{spin.config_version}</TableCell>
                           <TableCell><Badge variant={SPIN_STATUS_VARIANT[spin.status]}>{spin.reward_type === "physical_prize" && spin.status === "reward_issued" ? "Инструкция готова" : WHEEL_SPIN_STATUS_LABELS[spin.status]}</Badge></TableCell>
-                          <TableCell><p>{spin.external_operation_id ?? "—"}</p><p className="text-xs text-muted-foreground">Повторов: {spin.retries}</p></TableCell>
+                          <TableCell>{spin.external_operation_id ?? "—"}</TableCell>
                           {isFullVersion ? <TableCell>
                             <p>{spin.payment_method === "free_spin" ? "Вращение MVP" : "Очки активности"}</p>
                             {spin.payment_method === "activity_points" ? <>
@@ -614,7 +565,7 @@ export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFull
                         </TableRow>
                       )
                     })}
-                    {filteredSpins.length === 0 ? <TableRow><TableCell colSpan={isFullVersion ? 8 : 7} className="py-8 text-center text-muted-foreground">Вращений по заданным условиям не найдено. Измените поиск или фильтры.</TableCell></TableRow> : null}
+                    {filteredSpins.length === 0 ? <TableRow><TableCell colSpan={isFullVersion ? 8 : 7} className="py-8 text-center text-muted-foreground">Вращений не найдено. Проверьте user_id или spin_id в поиске.</TableCell></TableRow> : null}
                   </TableBody>
                 </Table>
               </div>
@@ -657,7 +608,7 @@ export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFull
                     {isFullVersion
                       ? <FieldBlock label="Стоимость вращения, очков" hint="Общий баланс с заданиями"><Input value="10" readOnly /></FieldBlock>
                       : <FieldBlock label="Бесплатных вращений" hint="Всем авторизованным, один раз за всё время"><Input value="5" readOnly /></FieldBlock>}
-                    <FieldBlock label="Ссылка на PDF «Правила игры» *" hint={isFullVersion ? "Укажите правила полной версии; PDF MVP сюда не подходит." : "Публичная HTTPS-ссылка; открывается отдельно от колеса."} error={fieldErrors.game_rules_url}><Input type="url" value={form.game_rules_url} onChange={(event) => setConfigurationField("game_rules_url", event.target.value)} placeholder="https://05.ru/.../rules.pdf" /></FieldBlock>
+                    <FieldBlock label="Ссылка на PDF «Правила игры»" hint={isFullVersion ? "Обязательна для публикации. Укажите правила полной версии, не PDF MVP." : "Обязательна для публикации. Публичная HTTPS-ссылка; открывается отдельно от колеса."} error={fieldErrors.game_rules_url}><Input type="url" value={form.game_rules_url} onChange={(event) => setConfigurationField("game_rules_url", event.target.value)} placeholder="https://05.ru/.../rules.pdf" /></FieldBlock>
                   </div>
                   <FieldBlock label="Каналы *" error={fieldErrors.channels}>
                     <div className="flex flex-wrap gap-5 rounded-md border p-3">
@@ -690,7 +641,7 @@ export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFull
                           <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted ring-1 ring-black/10">
                             {prize.image_url ? <img src={prize.image_url} alt="" className="h-full w-full object-cover" /> : <Gift className="text-muted-foreground" aria-hidden="true" />}
                           </div>
-                          <div className="min-w-0 flex-1"><p className="truncate font-semibold">{prize.display_name || `Приз ${index + 1}`}</p><p className="mt-1 truncate text-xs text-muted-foreground">{WHEEL_REWARD_TYPE_LABELS[prize.reward_type]} · вес {prize.selection_weight} · {formatProbability(effectiveProbability(prize, form.prizes))}</p></div>
+                          <div className="min-w-0 flex-1"><p className="truncate font-semibold">{prize.display_name || `Приз ${index + 1}`}</p><p className="mt-1 truncate text-xs text-muted-foreground">{WHEEL_REWARD_TYPE_LABELS[prize.reward_type]} · вес {prize.selection_weight} · {formatProbability(baseProbabilities[prize.id] ?? 0)}</p></div>
                           <Badge variant={prize.status === "active" ? "default" : "secondary"}>{index + 1}</Badge>
                         </button>
                       ))}
@@ -717,16 +668,16 @@ export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFull
                     </FieldBlock>
                     <FieldBlock label="Описание *" hint={selectedPrize.reward_type === "physical_prize" ? "Адрес, телефон, срок и порядок получения в магазине." : selectedPrize.reward_type === "promocode" ? "Укажите условия и срок действия промокода." : "Текст после выигрыша и при повторном открытии приза."} error={fieldErrors[`prize.${selectedPrize.id}.description`]}><Textarea value={selectedPrize.description} onChange={(event) => setPrizeField(selectedPrize.id, "description", event.target.value)} rows={3} /></FieldBlock>
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                      <FieldBlock label="Изображение *" error={fieldErrors[`prize.${selectedPrize.id}.image_url`]}><Input value={selectedPrize.image_url} onChange={(event) => setPrizeField(selectedPrize.id, "image_url", event.target.value)} placeholder="https://..." /></FieldBlock>
-                      <FieldBlock label="Загрузить изображение"><Input type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { if (typeof reader.result === "string") setPrizeField(selectedPrize.id, "image_url", reader.result) }; reader.readAsDataURL(file) }} /></FieldBlock>
+                      <FieldBlock label="Изображение приза *" hint="Одно изображение для колеса, списков и результата." error={fieldErrors[`prize.${selectedPrize.id}.image_url`]}><Input key={selectedPrize.id} type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { if (typeof reader.result === "string") setPrizeField(selectedPrize.id, "image_url", reader.result) }; reader.readAsDataURL(file) }} /></FieldBlock>
+                      {selectedPrize.image_url ? <img src={selectedPrize.image_url} alt="Текущее изображение приза" className="h-24 w-24 rounded-md object-contain ring-1 ring-black/10" /> : null}
                     </div>
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                       <FieldBlock label="Текст дополнительной кнопки" hint="Необязательно. Показывается после успешной выдачи." error={fieldErrors[`prize.${selectedPrize.id}.action_button_text`]}><Input value={selectedPrize.action_button_text} onChange={(event) => setPrizeField(selectedPrize.id, "action_button_text", event.target.value)} /></FieldBlock>
                       <FieldBlock label="Ссылка дополнительной кнопки" hint="Если кнопка не нужна, оставьте оба поля пустыми." error={fieldErrors[`prize.${selectedPrize.id}.action_button_url`]}><Input value={selectedPrize.action_button_url} onChange={(event) => setPrizeField(selectedPrize.id, "action_button_url", event.target.value)} /></FieldBlock>
                     </div>
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                      <FieldBlock label="Вес выпадения *" hint={`Базовая вероятность сейчас: ${formatProbability(effectiveProbability(selectedPrize, form.prizes))}`} error={fieldErrors[`prize.${selectedPrize.id}.selection_weight`]}><Input type="number" min="1" step="1" value={selectedPrize.selection_weight} onChange={(event) => setPrizeField(selectedPrize.id, "selection_weight", Number(event.target.value))} /></FieldBlock>
-                      <FieldBlock label={selectedPrize.reward_type === "physical_prize" ? "Запас *" : "Запас"} hint={selectedPrize.reward_type === "physical_prize" ? "Обязателен; уменьшается при фиксации выигрыша." : "Пусто — без ограничения"} error={fieldErrors[`prize.${selectedPrize.id}.total_stock`]}><Input type="number" min="1" step="1" value={selectedPrize.total_stock ?? ""} onChange={(event) => setPrizeField(selectedPrize.id, "total_stock", event.target.value === "" ? null : Number(event.target.value))} /></FieldBlock>
+                      <FieldBlock label="Вес выпадения *" hint={`Базовая вероятность (демо ответа backend): ${formatProbability(baseProbabilities[selectedPrize.id] ?? 0)}`} error={fieldErrors[`prize.${selectedPrize.id}.selection_weight`]}><Input type="number" min="1" step="1" value={selectedPrize.selection_weight} onChange={(event) => setPrizeField(selectedPrize.id, "selection_weight", Number(event.target.value))} /></FieldBlock>
+                      <FieldBlock label={selectedPrize.reward_type === "physical_prize" ? "Запас *" : "Запас"} hint={selectedPrize.reward_type === "physical_prize" ? "Обязателен; 0 — призы закончились." : "Пусто — без ограничения; 0 — призы закончились."} error={fieldErrors[`prize.${selectedPrize.id}.total_stock`]}><Input type="number" min="0" step="1" value={selectedPrize.total_stock ?? ""} onChange={(event) => setPrizeField(selectedPrize.id, "total_stock", event.target.value === "" ? null : Number(event.target.value))} /></FieldBlock>
                       <SelectField label="Статус" value={selectedPrize.status} options={[{ value: "active", label: "Активен" }, { value: "inactive", label: "Неактивен" }]} onChange={(value) => setPrizeField(selectedPrize.id, "status", value as WheelPrize["status"])} />
                     </div>
                     <Field orientation="horizontal" className="rounded-lg border p-4">
@@ -749,10 +700,9 @@ export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFull
                     <SelectField
                       label="Тип награды"
                       value={selectedPrize.reward_type}
-                      options={Object.entries(WHEEL_REWARD_TYPE_LABELS).map(([value, label]) => ({
+                      options={Object.entries(WHEEL_REWARD_TYPE_LABELS).filter(([value]) => isFullVersion || value === "bonus" || value === "promocode").map(([value, label]) => ({
                         value,
-                        label: !isFullVersion && (value === "activity_points" || value === "physical_prize") ? `${label} — полная версия` : label,
-                        disabled: !isFullVersion && (value === "activity_points" || value === "physical_prize"),
+                        label,
                       }))}
                       onChange={(value) => setPrizeRewardType(selectedPrize.id, value as WheelRewardType)}
                       hint={isFullVersion ? "Бонусы, промокоды, очки активности и физические призы." : "В MVP доступны только бонусы и промокоды."}
@@ -782,7 +732,7 @@ export function PrizeWheelSection({ globalSearch, onOpenMvpPrototype, onOpenFull
 
                     {selectedPrize.reward_type === "promocode" ? (
                       <div className="flex flex-col gap-3 rounded-lg bg-muted p-4">
-                        <SelectField label="Режим промокода" value={selectedPrize.promocode_mode ?? "personal"} options={[{ value: "personal", label: "Индивидуальный" }, { value: "shared", label: "Общий" }]} onChange={(value) => setPrizeField(selectedPrize.id, "promocode_mode", value as WheelPromocodeMode)} />
+                        <SelectField label="Режим промокода" value={selectedPrize.promocode_mode ?? "personal"} options={[{ value: "personal", label: "Индивидуальный" }, { value: "shared", label: "Общий" }]} onChange={(value) => setPromocodeMode(selectedPrize.id, value as WheelPromocodeMode)} />
                         {selectedPrize.promocode_mode === "personal" ? (
                           <FieldBlock label="Шаблон индивидуального промокода *" controlId="wheel-personal-template" error={fieldErrors[`prize.${selectedPrize.id}.personal_promocode_template_key`]}>
                             <Select value={selectedPrize.personal_promocode_template_key ?? ""} onValueChange={(value) => setPrizeField(selectedPrize.id, "personal_promocode_template_key", value)}>
